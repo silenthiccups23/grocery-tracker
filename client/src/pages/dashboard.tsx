@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Store as StoreIcon, ShoppingCart, DollarSign, TrendingDown, Plus, ArrowRight, ChevronDown, Filter, Ruler, ExternalLink, RefreshCw, Loader2 } from "lucide-react";
+import { Store as StoreIcon, ShoppingCart, DollarSign, TrendingDown, ChevronDown, Filter, Ruler, ExternalLink, RefreshCw, Loader2 } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -514,12 +514,6 @@ export default function Dashboard() {
               )}
               <span className="hidden sm:inline">{fetchPricesMutation.isPending ? "Fetching..." : "Fetch Prices"}</span>
             </Button>
-            <Link href="/add-price">
-              <Button size="sm" data-testid="button-add-price">
-                <Plus className="w-4 h-4 sm:mr-1" />
-                <span className="hidden sm:inline">Log Price</span>
-              </Button>
-            </Link>
           </nav>
         </div>
       </header>
@@ -579,13 +573,6 @@ export default function Dashboard() {
         <div className="mb-6">
           <div className="flex items-center justify-between mb-1">
             <h2 className="text-base font-semibold">Price Comparison</h2>
-            {items.length > 0 && (
-              <Link href="/add-price">
-                <Button variant="outline" size="sm" data-testid="button-log-price-cta">
-                  Log a price <ArrowRight className="w-3.5 h-3.5 ml-1" />
-                </Button>
-              </Link>
-            )}
           </div>
           {totalEntries > 0 && (
             <p className="text-[11px] text-muted-foreground/70 mb-4">Prices shown are estimates and may not reflect current in-store pricing. Actual prices may vary by location, availability, and promotions. Click any price to verify directly on the retailer's website.</p>
@@ -605,7 +592,7 @@ export default function Dashboard() {
                 </div>
                 <h3 className="font-medium mb-1">No items tracked yet</h3>
                 <p className="text-sm text-muted-foreground mb-4 max-w-xs">
-                  Start by adding stores and items, then log prices to compare them side by side.
+                  Start by adding stores and items, then fetch prices to compare them side by side.
                 </p>
                 <div className="flex gap-2">
                   <Link href="/stores">
@@ -692,7 +679,7 @@ export default function Dashboard() {
                           <div className="bg-muted/50 rounded-lg px-4 py-3">
                             <p className="text-sm font-medium text-muted-foreground">No prices available yet</p>
                             <p className="text-xs text-muted-foreground mt-0.5">
-                              This product wasn't found at your stores. Try hitting "Fetch Prices" to update, or log a price manually.
+                              This product wasn't found at your stores. Try hitting "Fetch Prices" to update.
                             </p>
                           </div>
                         ) : (
