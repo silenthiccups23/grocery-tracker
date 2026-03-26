@@ -470,6 +470,7 @@ export default function Dashboard() {
       group,
       matchingItems,
       allPriceData,
+      allPriceDataRaw,
       allSizeKeys,
       cheapestEntry,
       cheapestStore,
@@ -618,7 +619,7 @@ export default function Dashboard() {
             </Card>
           ) : (
             <div className="space-y-3">
-              {comparisonData.map(({ group, matchingItems, allPriceData, allSizeKeys, cheapestEntry, cheapestStore, hasUnitPrices }) => {
+              {comparisonData.map(({ group, matchingItems, allPriceData, allPriceDataRaw, allSizeKeys, cheapestEntry, cheapestStore, hasUnitPrices }) => {
                 const selectedTags = getSelectedTags(group.productName);
                 const selectedSizes = getSelectedSizes(group.productName);
                 return (
@@ -687,9 +688,18 @@ export default function Dashboard() {
 
                       {/* Matching items and their prices */}
                       {allPriceData.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">
-                          No prices match the selected filters. Try changing your size or type selection.
-                        </p>
+                        allPriceDataRaw.length === 0 ? (
+                          <div className="bg-muted/50 rounded-lg px-4 py-3">
+                            <p className="text-sm font-medium text-muted-foreground">No prices available yet</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              This product wasn't found at your stores. Try hitting "Fetch Prices" to update, or log a price manually.
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            No prices match the selected filters. Try changing your size or type selection.
+                          </p>
+                        )
                       ) : (
                         <div className="space-y-2.5">
                           {matchingItems.map(({ item, tags }) => {
