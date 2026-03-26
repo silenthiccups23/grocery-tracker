@@ -29,6 +29,7 @@ export interface IStorage {
   getItems(): Promise<Item[]>;
   getItem(id: number): Promise<Item | undefined>;
   createItem(item: InsertItem): Promise<Item>;
+  updateItem(id: number, data: { name?: string; category?: string | null; tags?: string | null; defaultUnit?: string | null }): Promise<Item>;
   deleteItem(id: number): Promise<void>;
 
   // Price Entries
@@ -93,6 +94,15 @@ export class DatabaseStorage implements IStorage {
 
   async createItem(item: InsertItem): Promise<Item> {
     return db.insert(items).values(item).returning().get();
+  }
+
+  async updateItem(id: number, data: { name?: string; category?: string | null; tags?: string | null; defaultUnit?: string | null }): Promise<Item> {
+    const updates: any = {};
+    if (data.name !== undefined) updates.name = data.name;
+    if (data.category !== undefined) updates.category = data.category;
+    if (data.tags !== undefined) updates.tags = data.tags;
+    if (data.defaultUnit !== undefined) updates.defaultUnit = data.defaultUnit;
+    return db.update(items).set(updates).where(eq(items.id, id)).returning().get();
   }
 
   async deleteItem(id: number): Promise<void> {

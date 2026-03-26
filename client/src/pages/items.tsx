@@ -11,14 +11,13 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { ShoppingCart, ArrowLeft, Plus, Trash2, Package, ChevronRight } from "lucide-react";
+import { ShoppingCart, ArrowLeft, Plus, Trash2, Package, Pencil, X, Check } from "lucide-react";
 
 const CATEGORIES = [
   "Produce", "Dairy", "Meat", "Bakery", "Frozen",
   "Beverages", "Snacks", "Pantry", "Household", "Other"
 ];
 
-// Helpful descriptions for each category
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
   Produce: "Fruits, vegetables, herbs",
   Dairy: "Milk, cheese, yogurt, eggs, butter",
@@ -32,12 +31,173 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
   Other: "Anything else",
 };
 
+const unitLabels: Record<string, string> = {
+  "fl oz": "Fluid Ounces (fl oz)",
+  "oz": "Ounces (oz)",
+  "lb": "Pounds (lb)",
+  "ct": "Count (ct)",
+  "gal": "Gallons (gal)",
+  "L": "Liters (L)",
+};
+
+// Inline edit component for a single item
+function ItemEditRow({ item, onDone }: { item: Item; onDone: () => void }) {
+  const { toast } = useToast();
+  const [editName, setEditName] = useState(item.name);
+  const [editCategory, setEditCategory] = useState(item.category || "");
+  const [editTags, setEditTags] = useState<string[]>(parseTags(item));
+  const [editUnit, setEditUnit] = useState(item.defaultUnit || "");
+
+  const availableTags = editCategory ? (TAG_OPTIONS[editCategory] || TAG_OPTIONS["Other"]) : [];
+
+  const updateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PATCH", `/api/items/${item.id}`, {
+        name: editName.trim(),
+        category: editCategory || null,
+        tags: editTags.length > 0 ? JSON.stringify(editTags) : null,
+        defaultUnit: editUnit || null,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/items"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/prices"] });
+      toast({ title: "Item updated" });
+      onDone();
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const toggleTag = (tag: string) => {
+    setEditTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
+  };
+
+  const handleCategoryChange = (cat: string) => {
+    if (editCategory === cat) {
+      setEditCategory("");
+      setEditTags([]);
+      setEditUnit("");
+    } else {
+      setEditCategory(cat);
+      // Keep tags that exist in the new category, drop ones that don't
+      const newAvailable = TAG_OPTIONS[cat] || [];
+      setEditTags(prev => prev.filter(t => newAvailable.includes(t)));
+      setEditUnit(DEFAULT_UNITS[cat] || "oz");
+    }
+  };
+
+  return (
+    <Card className="border-primary/30 bg-primary/5">
+      <CardContent className="py-4 px-5 space-y-4">
+        {/* Name */}
+        <div>
+          <Label className="text-xs font-medium text-muted-foreground mb-1 block">Name</Label>
+          <Input
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            className="text-sm"
+            data-testid={`edit-name-${item.id}`}
+          />
+        </div>
+
+        {/* Category */}
+        <div>
+          <Label className="text-xs font-medium text-muted-foreground mb-1.5 block">Category</Label>
+          <div className="flex flex-wrap gap-1.5">
+            {CATEGORIES.map(cat => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => handleCategoryChange(cat)}
+                className={`text-xs px-2.5 py-1.5 rounded-md border transition-colors ${
+                  editCategory === cat
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-card text-foreground border-border hover:bg-muted"
+                }`}
+              >
+                {CATEGORY_ICONS[cat] || "📦"} {cat}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Unit */}
+        {editCategory && (
+          <div>
+            <Label className="text-xs font-medium text-muted-foreground mb-1.5 block">Measured in</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {(CATEGORY_UNITS[editCategory] || UNITS).map(u => (
+                <button
+                  key={u}
+                  type="button"
+                  onClick={() => setEditUnit(u)}
+                  className={`text-xs px-2.5 py-1.5 rounded-md border transition-colors ${
+                    editUnit === u
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-card text-foreground border-border hover:bg-muted"
+                  }`}
+                >
+                  {unitLabels[u] || u}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Tags */}
+        {editCategory && availableTags.length > 0 && (
+          <div>
+            <Label className="text-xs font-medium text-muted-foreground mb-1.5 block">Type</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {availableTags.map(tag => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => toggleTag(tag)}
+                  className={`text-xs px-2.5 py-1.5 rounded-md border transition-colors ${
+                    editTags.includes(tag)
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-card text-foreground border-border hover:bg-muted"
+                  }`}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Save / Cancel */}
+        <div className="flex gap-2 pt-1">
+          <Button
+            size="sm"
+            onClick={() => updateMutation.mutate()}
+            disabled={updateMutation.isPending || !editName.trim()}
+            data-testid={`button-save-edit-${item.id}`}
+          >
+            <Check className="w-3.5 h-3.5 mr-1" />
+            {updateMutation.isPending ? "Saving..." : "Save"}
+          </Button>
+          <Button size="sm" variant="outline" onClick={onDone} data-testid={`button-cancel-edit-${item.id}`}>
+            <X className="w-3.5 h-3.5 mr-1" />
+            Cancel
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Items() {
   const { toast } = useToast();
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [defaultUnit, setDefaultUnit] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   const { data: items = [], isLoading } = useQuery<Item[]>({
     queryKey: ["/api/items"],
@@ -104,16 +264,6 @@ export default function Items() {
     }
   };
 
-  // Unit labels that are easier to understand
-  const unitLabels: Record<string, string> = {
-    "fl oz": "Fluid Ounces (fl oz)",
-    "oz": "Ounces (oz)",
-    "lb": "Pounds (lb)",
-    "ct": "Count (ct)",
-    "gal": "Gallons (gal)",
-    "L": "Liters (L)",
-  };
-
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card">
@@ -145,18 +295,13 @@ export default function Items() {
                   <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[10px] font-bold">1</span>
                   What product are you tracking?
                 </Label>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <div className="flex-1">
-                    <Input
-                      id="item-name"
-                      placeholder="e.g. Milk, Eggs, Chicken Breast, Orange Juice"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="text-sm"
-                      data-testid="input-item-name"
-                    />
-                  </div>
-                </div>
+                <Input
+                  placeholder="e.g. Milk, Eggs, Chicken Breast, Orange Juice"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="text-sm"
+                  data-testid="input-item-name"
+                />
               </div>
 
               {/* Step 2: Category */}
@@ -295,6 +440,16 @@ export default function Items() {
         ) : (
           <div className="space-y-2">
             {items.map((item) => {
+              if (editingId === item.id) {
+                return (
+                  <ItemEditRow
+                    key={item.id}
+                    item={item}
+                    onDone={() => setEditingId(null)}
+                  />
+                );
+              }
+
               const itemTags = parseTags(item);
               const icon = item.category ? (CATEGORY_ICONS[item.category] || "📦") : "📦";
               return (
@@ -337,16 +492,27 @@ export default function Items() {
                         )}
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
-                      onClick={() => deleteMutation.mutate(item.id)}
-                      disabled={deleteMutation.isPending}
-                      data-testid={`button-delete-item-${item.id}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-primary"
+                        onClick={() => setEditingId(item.id)}
+                        data-testid={`button-edit-item-${item.id}`}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => deleteMutation.mutate(item.id)}
+                        disabled={deleteMutation.isPending}
+                        data-testid={`button-delete-item-${item.id}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               );

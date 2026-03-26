@@ -216,6 +216,20 @@ export async function registerRoutes(
     res.status(201).json(item);
   });
 
+  app.patch("/api/items/:id", async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+    const item = await storage.getItem(id);
+    if (!item) return res.status(404).json({ error: "Item not found" });
+    const updated = await storage.updateItem(id, {
+      name: req.body.name ?? item.name,
+      category: req.body.category !== undefined ? req.body.category : item.category,
+      tags: req.body.tags !== undefined ? req.body.tags : item.tags,
+      defaultUnit: req.body.defaultUnit !== undefined ? req.body.defaultUnit : item.defaultUnit,
+    });
+    res.json(updated);
+  });
+
   app.delete("/api/items/:id", async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
