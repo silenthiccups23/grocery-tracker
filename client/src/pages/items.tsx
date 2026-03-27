@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import type { Item } from "@shared/schema";
 import { TAG_OPTIONS, parseTags, UNITS, DEFAULT_UNITS, CATEGORY_ICONS, CATEGORY_UNITS } from "@shared/schema";
+import { searchProducts as searchCatalog, type ProductEntry } from "@shared/products";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { ShoppingCart, ArrowLeft, Plus, Trash2, Package, Pencil, X, Check } from "lucide-react";
+import { ShoppingCart, ArrowLeft, Plus, Trash2, Package, Pencil, X, Check, Search } from "lucide-react";
 
 const CATEGORIES = [
   "Produce", "Dairy", "Meat", "Bakery", "Frozen",
@@ -199,6 +200,48 @@ export default function Items() {
   const [defaultUnit, setDefaultUnit] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
 
+  // Autocomplete state
+  const [suggestions, setSuggestions] = useState<ProductEntry[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [matchedProduct, setMatchedProduct] = useState<ProductEntry | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node) &&
+          inputRef.current && !inputRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const handleNameChange = (value: string) => {
+    setName(value);
+    setMatchedProduct(null);
+    if (value.trim().length >= 2) {
+      const results = searchCatalog(value);
+      setSuggestions(results);
+      setShowSuggestions(results.length > 0);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  const selectSuggestion = (product: ProductEntry) => {
+    setName(product.name);
+    setCategory(product.category);
+    setDefaultUnit(product.defaultUnit);
+    setSelectedTags([]);
+    setMatchedProduct(product);
+    setSuggestions([]);
+    setShowSuggestions(false);
+  };
+
   const { data: items = [], isLoading } = useQuery<Item[]>({
     queryKey: ["/api/items"],
   });
@@ -244,7 +287,13 @@ export default function Items() {
     });
   };
 
-  const availableTags = category ? (TAG_OPTIONS[category] || TAG_OPTIONS["Other"]) : [];
+  // If a product was selected from catalog, show only its relevant tags.
+  // Otherwise show all tags for the category.
+  const availableTags = matchedProduct
+    ? matchedProduct.relevantTags
+    : category
+      ? (TAG_OPTIONS[category] || TAG_OPTIONS["Other"])
+      : [];
 
   const toggleTag = (tag: string) => {
     setSelectedTags((prev) =>
@@ -295,14 +344,57 @@ export default function Items() {
                   <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[10px] font-bold">1</span>
                   What product are you tracking?
                 </Label>
-                <Input
-                  placeholder="e.g. Milk, Eggs, Chicken Breast, Orange Juice"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="text-sm"
-                  data-testid="input-item-name"
-                />
-                <p className="text-[11px] text-muted-foreground mt-1">Use generic product names for best results. Brand names or nicknames may not return prices.</p>
+                <div className="relative">
+                  <Input
+                    ref={inputRef}
+                    placeholder="Start typing... e.g. Milk, Yogurt, Chicken Breast"
+                    value={name}
+                    onChange={(e) => handleNameChange(e.target.value)}
+                    onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+                    className="text-sm"
+                    autoComplete="off"
+                    data-testid="input-item-name"
+                  />
+                  {/* Autocomplete dropdown */}
+                  {showSuggestions && suggestions.length > 0 && (
+                    <div
+                      ref={suggestionsRef}
+                      className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg overflow-hidden"
+                      data-testid="suggestions-dropdown"
+                    >
+                      {suggestions[0].name.toLowerCase() !== name.toLowerCase().trim() && (
+                        <p className="text-[11px] text-muted-foreground px-3 pt-2 pb-1">Did you mean...</p>
+                      )}
+                      {suggestions.map((product, i) => (
+                        <button
+                          key={`${product.name}-${i}`}
+                          type="button"
+                          onClick={() => selectSuggestion(product)}
+                          className="w-full text-left px-3 py-2.5 hover:bg-muted/60 flex items-center gap-3 transition-colors"
+                          data-testid={`suggestion-${i}`}
+                        >
+                          <span className="text-base">{CATEGORY_ICONS[product.category] || "📦"}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium">{product.name}</p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {product.category} · per {product.defaultUnit}
+                              {product.relevantTags.length > 0 && (
+                                <> · {product.relevantTags.slice(0, 4).join(", ")}{product.relevantTags.length > 4 ? "..." : ""}</>
+                              )}
+                            </p>
+                          </div>
+                          <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  {matchedProduct
+                    ? `✓ Matched to "${matchedProduct.name}" — category, unit, and tags auto-filled.`
+                    : "Type a product name and pick from suggestions for the best results."
+                  }
+                </p>
               </div>
 
               {/* Step 2: Category */}
