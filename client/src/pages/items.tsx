@@ -302,6 +302,7 @@ export default function Items() {
                   className="text-sm"
                   data-testid="input-item-name"
                 />
+                <p className="text-[11px] text-muted-foreground mt-1">Use generic product names for best results. Brand names or nicknames may not return prices.</p>
               </div>
 
               {/* Step 2: Category */}

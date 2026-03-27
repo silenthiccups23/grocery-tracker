@@ -357,10 +357,39 @@ export async function registerRoutes(
           const taskList = Array.from(uniqueTasks.values());
           const krogerCache = new Map<string, { price: number; size: number | null; unit: string | null }>();
 
+          // Build fallback search terms for items whose names might not be recognized
+          // e.g. "Winnies Organic" -> fallback to "sausage Organic" (using category as product type)
+          const categoryFallbacks: Record<string, string> = {
+            Meat: "meat", Dairy: "milk", Produce: "produce", Bakery: "bread",
+            Frozen: "frozen", Beverages: "drink", Snacks: "snack", Pantry: "pantry",
+            Household: "household", Other: "",
+          };
+
           const results = await Promise.allSettled(
             taskList.map(async ({ locId, term }) => {
-              const products = await searchProducts(term, locId, 3);
-              const priced = products.filter(p => p.price !== null && p.price > 0);
+              let products = await searchProducts(term, locId, 3);
+              let priced = products.filter(p => p.price !== null && p.price > 0);
+
+              // Fallback: if no results, try just the item name without tags
+              if (priced.length === 0) {
+                const matchingItem = allItems.find((_, idx) => itemSearchTerms[idx] === term);
+                if (matchingItem) {
+                  // Try just the item name alone
+                  const nameOnly = matchingItem.name;
+                  if (nameOnly !== term) {
+                    products = await searchProducts(nameOnly, locId, 3);
+                    priced = products.filter(p => p.price !== null && p.price > 0);
+                  }
+                  // Still nothing? Try category + tags as a generic search
+                  if (priced.length === 0 && matchingItem.category) {
+                    const tags = parseTags(matchingItem);
+                    const fallbackTerm = [matchingItem.category, ...tags].join(" ");
+                    products = await searchProducts(fallbackTerm, locId, 3);
+                    priced = products.filter(p => p.price !== null && p.price > 0);
+                  }
+                }
+              }
+
               if (priced.length > 0) {
                 const product = priced[0];
                 const defaultUnit = allItems.find((_, idx) => itemSearchTerms[idx] === term)?.defaultUnit || null;

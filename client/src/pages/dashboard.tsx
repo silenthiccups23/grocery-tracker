@@ -679,7 +679,7 @@ export default function Dashboard() {
                           <div className="bg-muted/50 rounded-lg px-4 py-3">
                             <p className="text-sm font-medium text-muted-foreground">No prices available yet</p>
                             <p className="text-xs text-muted-foreground mt-0.5">
-                              This product wasn't found at your stores. Try hitting "Fetch Prices" to update.
+                              This product wasn't found at your stores. If the name is a brand or nickname, try editing it to a generic name (e.g., "Hot Dogs" instead of a brand name). Then hit "Fetch Prices" to update.
                             </p>
                           </div>
                         ) : (
