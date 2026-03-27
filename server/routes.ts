@@ -333,13 +333,30 @@ export async function registerRoutes(
         let krogerLocations: Array<{ locationId: string; name: string; chain: string }> = [];
         try {
           const locations = await searchLocations(zipCode, 25);
-          krogerLocations = locations.slice(0, Math.max(otherStores.length, 3));
+          krogerLocations = locations;
         } catch {}
 
         if (krogerLocations.length > 0) {
-          const storeLocIds: string[] = otherStores.map((_, i) =>
-            krogerLocations[i % krogerLocations.length].locationId
-          );
+          // Smart store-to-location mapping:
+          // 1. Try to match by chain name (Ralphs → Ralphs location, Food 4 Less → Food4Less location)
+          // 2. Fall back to round-robin across all available locations
+          const storeLocIds: string[] = otherStores.map((store, i) => {
+            const storeLower = store.name.toLowerCase();
+            // Try to find a Kroger location matching this store's chain
+            const chainMatch = krogerLocations.find(loc =>
+              storeLower.includes(loc.chain.toLowerCase().replace(/[0-9]/g, "").trim()) ||
+              loc.chain.toLowerCase().includes(storeLower.replace(/[^a-z]/g, ""))
+            );
+            // Also try matching by name (e.g. store "Ralphs" matches location name "Ralphs - Bonita")
+            const nameMatch = !chainMatch ? krogerLocations.find(loc =>
+              loc.name.toLowerCase().includes(storeLower) ||
+              storeLower.includes(loc.name.toLowerCase().split(" - ")[0].toLowerCase())
+            ) : null;
+            const match = chainMatch || nameMatch;
+            if (match) return match.locationId;
+            // No match — assign a location round-robin so every store still gets prices
+            return krogerLocations[i % krogerLocations.length].locationId;
+          });
           const uniqueLocIds = [...new Set(storeLocIds)];
 
           const uniqueTasks = new Map<string, { itemIdxs: number[]; locId: string; term: string }>();
