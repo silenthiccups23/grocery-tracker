@@ -130,18 +130,83 @@ export function formatSize(size: number | null, unit: string | null): string {
   return `${sizeStr} ${unit}`;
 }
 
-// Tag options by category — these are the attributes a product can have
+// Tag options by category — modeled after how real grocery stores organize their aisles.
+// Includes both product types and attributes so users can filter precisely.
 export const TAG_OPTIONS: Record<string, string[]> = {
-  Dairy: ["Whole", "2%", "1%", "Skim", "Fat-Free", "Organic", "Grass-Fed", "Lactose-Free", "A2", "Raw", "Ultra-Pasteurized", "Flavored", "Non-Dairy"],
-  Produce: ["Conventional", "Organic", "Local", "Pre-Cut", "Frozen", "In-Season", "Hydroponic", "Non-GMO", "Baby/Mini"],
-  Meat: ["Conventional", "Organic", "Grass-Fed", "Free-Range", "Boneless", "Bone-In", "Lean", "Ground", "Wild-Caught", "Farm-Raised", "Pasture-Raised", "Smoked", "Uncured", "No Antibiotics"],
-  Bakery: ["White", "Whole Wheat", "Multigrain", "Sourdough", "Gluten-Free", "Organic", "Rye", "Brioche", "Sprouted", "Keto", "Thin-Sliced", "Unsliced"],
-  Frozen: ["Conventional", "Organic", "Family Size", "Single Serve", "Gluten-Free", "Low-Calorie", "Plant-Based", "Microwaveable", "Steam-in-Bag"],
-  Beverages: ["Regular", "Diet", "Zero Sugar", "Organic", "Cold-Pressed", "Sparkling", "Decaf", "Unsweetened", "Flavored", "Concentrate", "Single Serve", "Plant-Based"],
-  Snacks: ["Regular", "Organic", "Family Size", "Reduced Fat", "Gluten-Free", "Baked", "Kettle-Cooked", "Low-Sodium", "Protein", "Keto", "Multi-Pack", "Single Serve"],
-  Pantry: ["Regular", "Organic", "Low-Sodium", "Gluten-Free", "Family Size", "No Sugar Added", "Whole Grain", "Non-GMO", "Canned", "Dried", "Instant"],
-  Household: ["Regular", "Eco-Friendly", "Concentrated", "Fragrance-Free", "Biodegradable", "Sensitive", "Heavy-Duty", "Refill", "Bulk", "Unscented"],
-  Other: ["Regular", "Organic", "Premium", "Value Pack", "Trial Size"],
+  Dairy: [
+    // Milk types
+    "Whole", "2%", "1%", "Skim", "Fat-Free", "Lactose-Free", "Non-Dairy", "Oat", "Almond", "Soy",
+    // Yogurt types
+    "Greek", "Low-Fat", "Non-Fat", "Plant-Based",
+    // Cheese types
+    "Shredded", "Sliced", "Block", "Cream Cheese", "String Cheese",
+    // Other dairy
+    "Butter", "Salted", "Unsalted", "Whipped",
+    // Attributes
+    "Organic", "Grass-Fed", "A2", "Raw", "Ultra-Pasteurized", "Flavored", "Vanilla", "Plain", "Strawberry",
+  ],
+  Produce: [
+    // Fruits
+    "Fresh", "Pre-Cut", "Bagged", "Bunch",
+    // Attributes
+    "Conventional", "Organic", "Local", "In-Season", "Hydroponic", "Non-GMO", "Baby/Mini",
+    // Frozen produce
+    "Frozen", "Canned",
+  ],
+  Meat: [
+    // Cuts & types
+    "Boneless", "Bone-In", "Lean", "Ground", "Whole", "Thigh", "Breast", "Wing", "Drumstick",
+    "Steak", "Roast", "Ribs", "Tenderloin", "Fillet", "Patty",
+    // Deli
+    "Deli-Sliced", "Smoked", "Cured", "Uncured",
+    // Seafood
+    "Wild-Caught", "Farm-Raised", "Shell-On", "Peeled", "Fresh", "Frozen",
+    // Attributes
+    "Conventional", "Organic", "Grass-Fed", "Free-Range", "Pasture-Raised", "No Antibiotics", "Kosher", "Halal",
+  ],
+  Bakery: [
+    // Bread types
+    "White", "Whole Wheat", "Multigrain", "Sourdough", "Rye", "Brioche", "Sprouted",
+    // Other baked goods
+    "Tortilla", "Bun", "Roll", "Bagel", "English Muffin", "Pita", "Naan", "Croissant",
+    // Attributes
+    "Gluten-Free", "Organic", "Keto", "Thin-Sliced", "Unsliced", "Sliced",
+  ],
+  Frozen: [
+    // Frozen meals
+    "Pizza", "Burrito", "Dinner", "Breakfast",
+    // Frozen produce/protein
+    "Vegetables", "Fruit", "Chicken", "Fish", "Shrimp",
+    // Ice cream & desserts
+    "Ice Cream", "Popsicle", "Dessert", "Waffles", "Pancakes",
+    // Attributes
+    "Conventional", "Organic", "Family Size", "Single Serve", "Gluten-Free", "Low-Calorie", "Plant-Based", "Microwaveable", "Steam-in-Bag",
+  ],
+  Beverages: [
+    // Types
+    "Water", "Sparkling Water", "Juice", "Soda", "Coffee", "Tea", "Sports Drink", "Energy Drink", "Kombucha", "Lemonade",
+    // Attributes
+    "Regular", "Diet", "Zero Sugar", "Organic", "Cold-Pressed", "Sparkling", "Decaf", "Unsweetened", "Flavored", "Concentrate", "Single Serve", "Plant-Based", "Electrolyte",
+  ],
+  Snacks: [
+    // Types
+    "Chips", "Crackers", "Cookies", "Nuts", "Trail Mix", "Popcorn", "Pretzels", "Granola Bar", "Protein Bar", "Dried Fruit", "Jerky", "Rice Cake",
+    // Attributes
+    "Regular", "Organic", "Family Size", "Reduced Fat", "Gluten-Free", "Baked", "Kettle-Cooked", "Low-Sodium", "Protein", "Keto", "Multi-Pack", "Single Serve", "Spicy", "BBQ", "Salt & Vinegar",
+  ],
+  Pantry: [
+    // Types
+    "Cereal", "Oatmeal", "Pasta", "Rice", "Beans", "Canned Tomato", "Soup", "Broth", "Sauce", "Cooking Oil", "Olive Oil", "Vinegar", "Spice", "Flour", "Sugar", "Honey", "Peanut Butter", "Jelly",
+    // Attributes
+    "Regular", "Organic", "Low-Sodium", "Gluten-Free", "Family Size", "No Sugar Added", "Whole Grain", "Non-GMO", "Canned", "Dried", "Instant", "Extra Virgin",
+  ],
+  Household: [
+    // Types
+    "Paper Towels", "Toilet Paper", "Trash Bags", "Dish Soap", "Laundry Detergent", "All-Purpose Cleaner", "Disinfectant", "Sponge", "Aluminum Foil", "Plastic Wrap", "Zip Bags",
+    // Attributes
+    "Regular", "Eco-Friendly", "Concentrated", "Fragrance-Free", "Biodegradable", "Sensitive", "Heavy-Duty", "Refill", "Bulk", "Unscented",
+  ],
+  Other: ["Regular", "Organic", "Premium", "Value Pack", "Trial Size", "Import", "Specialty"],
 };
 
 // Category emoji icons for display
