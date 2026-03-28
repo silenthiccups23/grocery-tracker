@@ -409,8 +409,19 @@ export async function registerRoutes(
 
               if (priced.length > 0) {
                 const product = priced[0];
-                const defaultUnit = allItems.find((_, idx) => itemSearchTerms[idx] === term)?.defaultUnit || null;
-                const sizeInfo = parseKrogerSize(product.size, defaultUnit);
+                const matchingItem = allItems.find((_, idx) => itemSearchTerms[idx] === term);
+                const defaultUnit = matchingItem?.defaultUnit || null;
+                // Try parsing size from the API's size field first
+                let sizeInfo = parseKrogerSize(product.size, defaultUnit);
+                // If size is missing, try extracting it from the product description
+                if (!sizeInfo.size && product.description) {
+                  sizeInfo = parseKrogerSize(product.description, defaultUnit);
+                }
+                // If still no size, use a sensible default for common products
+                if (!sizeInfo.size && defaultUnit) {
+                  const defaults = inferDefaultSize(matchingItem?.name || "", defaultUnit);
+                  sizeInfo = { size: defaults.size, unit: defaults.unit || defaultUnit };
+                }
                 const finalPrice = product.promoPrice && product.promoPrice > 0
                   ? product.promoPrice : product.price!;
                 krogerCache.set(`${locId}|${term}`, { price: finalPrice, size: sizeInfo.size, unit: sizeInfo.unit });
@@ -611,6 +622,81 @@ function parseCostcoSize(sizeStr: string, defaultUnit: string | null): { size: n
     if (match) {
       const result = handler(match);
       if (result) return result;
+    }
+  }
+
+  return { size: null, unit: defaultUnit };
+}
+
+/**
+ * Infer a reasonable default size for a product when the API doesn't provide one.
+ * Based on common grocery product sizes.
+ */
+function inferDefaultSize(productName: string, defaultUnit: string): { size: number | null; unit: string | null } {
+  const lower = productName.toLowerCase();
+
+  // Common product default sizes
+  const defaults: Array<{ keywords: string[]; size: number; unit: string }> = [
+    // Dairy liquids
+    { keywords: ["milk"], size: 128, unit: "fl oz" },         // 1 gallon
+    { keywords: ["cream", "creamer"], size: 32, unit: "fl oz" }, // 1 quart
+    { keywords: ["yogurt"], size: 32, unit: "oz" },            // 32 oz tub
+    // Eggs
+    { keywords: ["eggs", "egg"], size: 12, unit: "ct" },       // 1 dozen
+    // Cheese
+    { keywords: ["cheese"], size: 8, unit: "oz" },             // 8 oz block/bag
+    { keywords: ["butter"], size: 16, unit: "oz" },            // 1 lb
+    // Produce
+    { keywords: ["bananas", "banana"], size: 1, unit: "lb" },
+    { keywords: ["apples", "apple"], size: 1, unit: "lb" },
+    { keywords: ["oranges", "orange"], size: 1, unit: "lb" },
+    { keywords: ["tomato"], size: 1, unit: "lb" },
+    { keywords: ["potato"], size: 5, unit: "lb" },
+    { keywords: ["onion"], size: 1, unit: "lb" },
+    // Meat
+    { keywords: ["chicken breast", "chicken thigh"], size: 1, unit: "lb" },
+    { keywords: ["ground beef", "ground turkey"], size: 1, unit: "lb" },
+    { keywords: ["steak"], size: 1, unit: "lb" },
+    { keywords: ["bacon"], size: 16, unit: "oz" },
+    { keywords: ["hot dog"], size: 8, unit: "ct" },
+    { keywords: ["sausage"], size: 16, unit: "oz" },
+    { keywords: ["salmon", "tilapia", "shrimp"], size: 1, unit: "lb" },
+    // Bakery
+    { keywords: ["bread"], size: 20, unit: "oz" },
+    { keywords: ["tortilla"], size: 10, unit: "ct" },
+    { keywords: ["bagel"], size: 6, unit: "ct" },
+    { keywords: ["bun"], size: 8, unit: "ct" },
+    // Beverages
+    { keywords: ["water"], size: 128, unit: "fl oz" },         // 1 gallon
+    { keywords: ["juice", "orange juice", "apple juice"], size: 64, unit: "fl oz" }, // half gallon
+    { keywords: ["soda", "cola"], size: 144, unit: "fl oz" },  // 12-pack
+    { keywords: ["coffee"], size: 12, unit: "oz" },
+    // Pantry
+    { keywords: ["rice"], size: 32, unit: "oz" },              // 2 lb bag
+    { keywords: ["pasta", "spaghetti"], size: 16, unit: "oz" }, // 1 lb box
+    { keywords: ["beans"], size: 15, unit: "oz" },             // standard can
+    { keywords: ["cereal"], size: 18, unit: "oz" },
+    { keywords: ["soup"], size: 10.75, unit: "oz" },           // standard can
+    { keywords: ["peanut butter"], size: 16, unit: "oz" },
+    { keywords: ["olive oil", "cooking oil"], size: 16, unit: "fl oz" },
+    { keywords: ["flour"], size: 80, unit: "oz" },             // 5 lb
+    { keywords: ["sugar"], size: 64, unit: "oz" },             // 4 lb
+    // Snacks
+    { keywords: ["chips"], size: 10, unit: "oz" },
+    { keywords: ["crackers"], size: 8, unit: "oz" },
+    { keywords: ["cookies"], size: 13, unit: "oz" },
+    { keywords: ["popcorn"], size: 8, unit: "oz" },
+    // Household
+    { keywords: ["paper towel"], size: 6, unit: "ct" },
+    { keywords: ["toilet paper"], size: 12, unit: "ct" },
+    { keywords: ["trash bag"], size: 40, unit: "ct" },
+    { keywords: ["dish soap"], size: 22, unit: "fl oz" },
+    { keywords: ["detergent"], size: 100, unit: "fl oz" },
+  ];
+
+  for (const d of defaults) {
+    if (d.keywords.some(kw => lower.includes(kw))) {
+      return { size: d.size, unit: d.unit };
     }
   }
 
