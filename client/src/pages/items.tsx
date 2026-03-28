@@ -474,7 +474,7 @@ export default function Items() {
                             {item.match ? (
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <span className="text-base">{CATEGORY_ICONS[item.match.category] || "\ud83d\udce6"}</span>
+                                  <span className="text-base">{CATEGORY_ICONS[item.match.category] || "📦"}</span>
                                   <span className="text-sm font-medium">{item.match.name}</span>
                                   <Badge variant="secondary" className="text-[10px]">{item.match.category}</Badge>
                                   <span className="text-[10px] text-muted-foreground">per {item.match.defaultUnit}</span>
@@ -488,7 +488,7 @@ export default function Items() {
                             ) : (
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <span className="text-base">\u2753</span>
+                                  <span className="text-base">❓</span>
                                   <span className="text-sm font-medium">{item.raw}</span>
                                   <span className="text-[10px] text-amber-600 dark:text-amber-400">No match found</span>
                                 </div>
