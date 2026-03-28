@@ -140,9 +140,11 @@ export const TAG_OPTIONS: Record<string, string[]> = {
     "Greek", "Low-Fat", "Non-Fat", "Plant-Based",
     // Cheese types
     "Shredded", "Sliced", "Block", "Cream Cheese", "String Cheese",
-    // Other dairy
-    "Butter", "Salted", "Unsalted", "Whipped",
-    // Attributes
+    // Egg types
+    "Cage-Free", "Free-Range", "Pasture-Raised", "Brown", "Large", "Extra Large",
+    // Butter types
+    "Salted", "Unsalted", "Whipped",
+    // Attributes (milk/butter only: Grass-Fed; general: Organic)
     "Organic", "Grass-Fed", "A2", "Raw", "Ultra-Pasteurized", "Flavored", "Vanilla", "Plain", "Strawberry",
   ],
   Produce: [

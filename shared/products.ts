@@ -31,7 +31,7 @@ export const PRODUCT_CATALOG: ProductEntry[] = [
     relevantTags: ["Shredded", "Sliced", "Block", "Cream Cheese", "String Cheese", "Organic"] },
   { name: "Eggs", aliases: ["huevos", "egg", "dozen eggs", "large eggs"],
     category: "Dairy", defaultUnit: "ct",
-    relevantTags: ["Conventional", "Organic", "Free-Range", "Pasture-Raised", "Cage-Free", "Grass-Fed"] },
+    relevantTags: ["Conventional", "Cage-Free", "Free-Range", "Pasture-Raised", "Organic", "Brown", "Large", "Extra Large"] },
   { name: "Butter", aliases: ["mantequilla", "margarine"],
     category: "Dairy", defaultUnit: "oz",
     relevantTags: ["Salted", "Unsalted", "Whipped", "Organic", "Grass-Fed"] },
