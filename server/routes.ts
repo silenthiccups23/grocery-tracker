@@ -216,6 +216,26 @@ export async function registerRoutes(
     res.status(201).json(item);
   });
 
+  // Bulk create items
+  app.post("/api/items/bulk", async (req, res) => {
+    const itemsData: Array<{ name: string; category: string | null; tags: string | null; defaultUnit: string | null }> = req.body.items;
+    if (!Array.isArray(itemsData) || itemsData.length === 0) {
+      return res.status(400).json({ error: "No items provided." });
+    }
+    const created: any[] = [];
+    for (const data of itemsData) {
+      if (!data.name?.trim()) continue;
+      const item = await storage.createItem({
+        name: data.name.trim(),
+        category: data.category || null,
+        tags: data.tags || null,
+        defaultUnit: data.defaultUnit || null,
+      });
+      created.push(item);
+    }
+    res.status(201).json(created);
+  });
+
   app.patch("/api/items/:id", async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });

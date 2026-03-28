@@ -12,7 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { ShoppingCart, ArrowLeft, Plus, Trash2, Package, Pencil, X, Check, Search } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { ShoppingCart, ArrowLeft, Plus, Trash2, Package, Pencil, X, Check, Search, List, FileText, Loader2 } from "lucide-react";
 
 const CATEGORIES = [
   "Produce", "Dairy", "Meat", "Bakery", "Frozen",
@@ -199,6 +200,60 @@ export default function Items() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [defaultUnit, setDefaultUnit] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [addMode, setAddMode] = useState<"single" | "bulk">("single");
+
+  // Bulk add state
+  const [bulkText, setBulkText] = useState("");
+  const [bulkParsed, setBulkParsed] = useState<Array<{ raw: string; match: ProductEntry | null; selected: boolean }>>([]);
+  const [bulkStep, setBulkStep] = useState<"input" | "preview">("input");
+
+  const parseBulkText = () => {
+    const lines = bulkText
+      .split(/[,\n]+/)
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+    const parsed = lines.map(raw => {
+      const results = searchCatalog(raw);
+      const match = results.length > 0 ? results[0] : null;
+      return { raw, match, selected: true };
+    });
+    setBulkParsed(parsed);
+    setBulkStep("preview");
+  };
+
+  const toggleBulkItem = (index: number) => {
+    setBulkParsed(prev => prev.map((item, i) => i === index ? { ...item, selected: !item.selected } : item));
+  };
+
+  const bulkAddMutation = useMutation({
+    mutationFn: async (items: Array<{ name: string; category: string | null; tags: string | null; defaultUnit: string | null }>) => {
+      const res = await apiRequest("POST", "/api/items/bulk", { items });
+      return res.json();
+    },
+    onSuccess: (created: any[]) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/items"] });
+      setBulkText("");
+      setBulkParsed([]);
+      setBulkStep("input");
+      toast({ title: `${created.length} item${created.length === 1 ? "" : "s"} added`, description: "Fetch prices to get pricing for the new items." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const handleBulkAdd = () => {
+    const toAdd = bulkParsed
+      .filter(p => p.selected)
+      .map(p => ({
+        name: p.match?.name || p.raw,
+        category: p.match?.category || null,
+        tags: null, // no tags in bulk mode — user can edit after
+        defaultUnit: p.match?.defaultUnit || null,
+      }));
+    if (toAdd.length === 0) return;
+    bulkAddMutation.mutate(toAdd);
+  };
 
   // Autocomplete state
   const [suggestions, setSuggestions] = useState<ProductEntry[]>([]);
@@ -335,7 +390,139 @@ export default function Items() {
         {/* Add Item Form */}
         <Card className="mb-8">
           <CardContent className="pt-5 pb-5 px-5">
-            <h2 className="text-sm font-semibold mb-4">Add an Item</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold">Add Items</h2>
+              <div className="flex items-center bg-muted rounded-lg p-0.5">
+                <button
+                  type="button"
+                  onClick={() => { setAddMode("single"); setBulkStep("input"); }}
+                  className={`text-xs px-3 py-1.5 rounded-md transition-colors ${addMode === "single" ? "bg-card text-foreground shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+                  data-testid="button-mode-single"
+                >
+                  <Plus className="w-3 h-3 inline mr-1" />Single
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAddMode("bulk")}
+                  className={`text-xs px-3 py-1.5 rounded-md transition-colors ${addMode === "bulk" ? "bg-card text-foreground shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+                  data-testid="button-mode-bulk"
+                >
+                  <List className="w-3 h-3 inline mr-1" />Bulk Add
+                </button>
+              </div>
+            </div>
+
+            {addMode === "bulk" ? (
+              <div className="space-y-4">
+                {bulkStep === "input" ? (
+                  <>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                        Type or paste your grocery list
+                      </Label>
+                      <Textarea
+                        placeholder={"Milk\nEggs\nChicken Breast\nRice\nBananas, Avocados, Tortillas"}
+                        value={bulkText}
+                        onChange={(e) => setBulkText(e.target.value)}
+                        className="text-sm min-h-[120px]"
+                        data-testid="textarea-bulk"
+                      />
+                      <p className="text-[11px] text-muted-foreground mt-1">Separate items with commas or new lines. We'll match them to products automatically.</p>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={parseBulkText}
+                      disabled={!bulkText.trim()}
+                      data-testid="button-bulk-parse"
+                    >
+                      <Search className="w-4 h-4 mr-1.5" />
+                      Find Products ({bulkText.split(/[,\n]+/).filter(s => s.trim()).length})
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label className="text-xs font-medium text-muted-foreground">
+                          Review matches ({bulkParsed.filter(p => p.selected).length} selected)
+                        </Label>
+                        <button
+                          type="button"
+                          onClick={() => setBulkStep("input")}
+                          className="text-xs text-primary hover:underline"
+                        >
+                          Back to edit
+                        </button>
+                      </div>
+                      <div className="space-y-1.5">
+                        {bulkParsed.map((item, i) => (
+                          <label
+                            key={i}
+                            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors ${
+                              item.selected
+                                ? item.match ? "bg-primary/5 border-primary/25" : "bg-amber-50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-700"
+                                : "bg-muted/30 border-transparent opacity-50"
+                            }`}
+                            data-testid={`bulk-item-${i}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={item.selected}
+                              onChange={() => toggleBulkItem(i)}
+                              className="rounded"
+                            />
+                            {item.match ? (
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-base">{CATEGORY_ICONS[item.match.category] || "\ud83d\udce6"}</span>
+                                  <span className="text-sm font-medium">{item.match.name}</span>
+                                  <Badge variant="secondary" className="text-[10px]">{item.match.category}</Badge>
+                                  <span className="text-[10px] text-muted-foreground">per {item.match.defaultUnit}</span>
+                                </div>
+                                {item.raw.toLowerCase() !== item.match.name.toLowerCase() && (
+                                  <p className="text-[10px] text-muted-foreground mt-0.5 ml-7">
+                                    Matched from "{item.raw}"
+                                  </p>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-base">\u2753</span>
+                                  <span className="text-sm font-medium">{item.raw}</span>
+                                  <span className="text-[10px] text-amber-600 dark:text-amber-400">No match found</span>
+                                </div>
+                                <p className="text-[10px] text-muted-foreground mt-0.5 ml-7">
+                                  Will be added as-is. You can edit it later.
+                                </p>
+                              </div>
+                            )}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        onClick={handleBulkAdd}
+                        disabled={bulkAddMutation.isPending || bulkParsed.filter(p => p.selected).length === 0}
+                        data-testid="button-bulk-add"
+                      >
+                        {bulkAddMutation.isPending ? (
+                          <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                        ) : (
+                          <Plus className="w-4 h-4 mr-1.5" />
+                        )}
+                        Add {bulkParsed.filter(p => p.selected).length} Items
+                      </Button>
+                      <Button type="button" variant="outline" onClick={() => { setBulkStep("input"); setBulkParsed([]); }}>
+                        <X className="w-4 h-4 mr-1" /> Cancel
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
 
               {/* Step 1: Name */}
@@ -504,6 +691,7 @@ export default function Items() {
                 </div>
               )}
             </form>
+            )}
           </CardContent>
         </Card>
 
