@@ -4,14 +4,21 @@ import {
   type PriceEntry, type InsertPriceEntry, priceEntries,
   settings,
 } from "@shared/schema";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import Database from "better-sqlite3";
 import { eq, and, desc } from "drizzle-orm";
+import { drizzle as drizzleLibsql } from "drizzle-orm/libsql";
+import { createClient } from "@libsql/client";
 
-const sqlite = new Database("data.db");
-sqlite.pragma("journal_mode = WAL");
+// Connect to Turso (cloud) if TURSO_DATABASE_URL is set, otherwise fall back to local file
+const tursoUrl = process.env.TURSO_DATABASE_URL;
+const tursoToken = process.env.TURSO_AUTH_TOKEN;
 
-export const db = drizzle(sqlite);
+const client = createClient(
+  tursoUrl
+    ? { url: tursoUrl, authToken: tursoToken }
+    : { url: "file:./data.db" }
+);
+
+export const db = drizzleLibsql(client);
 
 export interface IStorage {
   // Settings
@@ -42,58 +49,60 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
   // Settings
   async getSetting(key: string): Promise<string | null> {
-    const row = db.select().from(settings).where(eq(settings.key, key)).get();
-    return row?.value ?? null;
+    const rows = await db.select().from(settings).where(eq(settings.key, key));
+    return rows[0]?.value ?? null;
   }
 
   async setSetting(key: string, value: string): Promise<void> {
-    // Upsert
-    const existing = db.select().from(settings).where(eq(settings.key, key)).get();
-    if (existing) {
-      db.update(settings).set({ value }).where(eq(settings.key, key)).run();
+    const rows = await db.select().from(settings).where(eq(settings.key, key));
+    if (rows.length > 0) {
+      await db.update(settings).set({ value }).where(eq(settings.key, key));
     } else {
-      db.insert(settings).values({ key, value }).run();
+      await db.insert(settings).values({ key, value });
     }
   }
 
   // Stores
   async getStores(): Promise<Store[]> {
-    return db.select().from(stores).all();
+    return db.select().from(stores);
   }
 
   async getStore(id: number): Promise<Store | undefined> {
-    return db.select().from(stores).where(eq(stores.id, id)).get();
+    const rows = await db.select().from(stores).where(eq(stores.id, id));
+    return rows[0];
   }
 
   async createStore(store: InsertStore): Promise<Store> {
-    return db.insert(stores).values(store).returning().get();
+    const rows = await db.insert(stores).values(store).returning();
+    return rows[0];
   }
 
   async updateStore(id: number, data: { location: string | null; address: string | null }): Promise<Store> {
-    return db.update(stores)
+    const rows = await db.update(stores)
       .set({ location: data.location, address: data.address })
       .where(eq(stores.id, id))
-      .returning()
-      .get();
+      .returning();
+    return rows[0];
   }
 
   async deleteStore(id: number): Promise<void> {
-    db.delete(stores).where(eq(stores.id, id)).run();
-    // Also delete related price entries
-    db.delete(priceEntries).where(eq(priceEntries.storeId, id)).run();
+    await db.delete(stores).where(eq(stores.id, id));
+    await db.delete(priceEntries).where(eq(priceEntries.storeId, id));
   }
 
   // Items
   async getItems(): Promise<Item[]> {
-    return db.select().from(items).all();
+    return db.select().from(items);
   }
 
   async getItem(id: number): Promise<Item | undefined> {
-    return db.select().from(items).where(eq(items.id, id)).get();
+    const rows = await db.select().from(items).where(eq(items.id, id));
+    return rows[0];
   }
 
   async createItem(item: InsertItem): Promise<Item> {
-    return db.insert(items).values(item).returning().get();
+    const rows = await db.insert(items).values(item).returning();
+    return rows[0];
   }
 
   async updateItem(id: number, data: { name?: string; category?: string | null; tags?: string | null; defaultUnit?: string | null }): Promise<Item> {
@@ -102,33 +111,33 @@ export class DatabaseStorage implements IStorage {
     if (data.category !== undefined) updates.category = data.category;
     if (data.tags !== undefined) updates.tags = data.tags;
     if (data.defaultUnit !== undefined) updates.defaultUnit = data.defaultUnit;
-    return db.update(items).set(updates).where(eq(items.id, id)).returning().get();
+    const rows = await db.update(items).set(updates).where(eq(items.id, id)).returning();
+    return rows[0];
   }
 
   async deleteItem(id: number): Promise<void> {
-    db.delete(items).where(eq(items.id, id)).run();
-    // Also delete related price entries
-    db.delete(priceEntries).where(eq(priceEntries.itemId, id)).run();
+    await db.delete(items).where(eq(items.id, id));
+    await db.delete(priceEntries).where(eq(priceEntries.itemId, id));
   }
 
   // Price Entries
   async getPriceEntries(): Promise<PriceEntry[]> {
-    return db.select().from(priceEntries).orderBy(desc(priceEntries.date)).all();
+    return db.select().from(priceEntries).orderBy(desc(priceEntries.date));
   }
 
   async getPriceEntriesByItem(itemId: number): Promise<PriceEntry[]> {
     return db.select().from(priceEntries)
       .where(eq(priceEntries.itemId, itemId))
-      .orderBy(desc(priceEntries.date))
-      .all();
+      .orderBy(desc(priceEntries.date));
   }
 
   async createPriceEntry(entry: InsertPriceEntry): Promise<PriceEntry> {
-    return db.insert(priceEntries).values(entry).returning().get();
+    const rows = await db.insert(priceEntries).values(entry).returning();
+    return rows[0];
   }
 
   async deletePriceEntry(id: number): Promise<void> {
-    db.delete(priceEntries).where(eq(priceEntries.id, id)).run();
+    await db.delete(priceEntries).where(eq(priceEntries.id, id));
   }
 }
 
