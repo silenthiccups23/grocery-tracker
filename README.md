@@ -121,5 +121,3 @@ The app understands that milk is measured in fluid ounces (not dry ounces), eggs
 | Nominatim (geocoding) | 1 request/second |
 
 ## License
-
-This project was built as part of a Masters in Learning Design and Technology program at Westmont College.
