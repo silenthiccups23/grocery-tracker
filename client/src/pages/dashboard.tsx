@@ -239,6 +239,9 @@ export default function Dashboard() {
             <Link href="/stores">
               <Button variant="ghost" size="sm" data-testid="link-stores" aria-label="Manage stores">Stores</Button>
             </Link>
+            <Link href="/products">
+              <Button variant="ghost" size="sm" data-testid="link-products" aria-label="Browse collected products">Products</Button>
+            </Link>
             <Link href="/items">
               <Button variant="ghost" size="sm" data-testid="link-items" aria-label="Manage tracked items">Items</Button>
             </Link>

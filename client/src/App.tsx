@@ -8,12 +8,14 @@ import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Stores from "@/pages/stores";
 import Items from "@/pages/items";
+import Products from "@/pages/products";
 function AppRouter() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/stores" component={Stores} />
       <Route path="/items" component={Items} />
+      <Route path="/products" component={Products} />
       <Route component={NotFound} />
     </Switch>
   );
