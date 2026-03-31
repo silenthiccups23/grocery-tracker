@@ -188,43 +188,48 @@ export default function Stores() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-5 flex items-center gap-3">
-          <Link href="/">
-            <Button variant="ghost" size="icon" className="h-8 w-8" data-testid="button-back">
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-          </Link>
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
-              <ShoppingCart className="w-5 h-5 text-primary-foreground" />
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:p-4 focus:bg-white focus:text-blue-600 focus:underline">Skip to main content</a>
+      <header role="banner" className="border-b border-border bg-card">
+        <nav aria-label="Main navigation">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 py-5 flex items-center gap-3">
+            <Link href="/">
+              <Button variant="ghost" size="icon" className="h-8 w-8 min-h-[44px] min-w-[44px] focus:ring-2 focus:ring-blue-500" aria-label="Back to dashboard" data-testid="button-back">
+                <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+              </Button>
+            </Link>
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center" aria-hidden="true">
+                <ShoppingCart className="w-5 h-5 text-primary-foreground" aria-hidden="true" />
+              </div>
+              <h1 className="text-lg font-semibold tracking-tight">My Stores</h1>
             </div>
-            <h1 className="text-lg font-semibold tracking-tight">My Stores</h1>
           </div>
-        </div>
+        </nav>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
+      <main id="main-content" className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
         {/* Zip code + radius search */}
+        <section role="region" aria-label="Store search">
         <Card className="mb-6">
           <CardContent className="pt-5 pb-5 px-5">
             <div className="flex items-center gap-3 mb-3">
-              <MapPinned className="w-5 h-5 text-primary shrink-0" />
+              <MapPinned className="w-5 h-5 text-primary shrink-0" aria-hidden="true" />
               <div>
                 <h2 className="text-sm font-semibold">Find stores near you</h2>
                 <p className="text-xs text-muted-foreground">Search by zip code and radius, then pick the stores you want to track.</p>
               </div>
             </div>
-            <form onSubmit={handleSearch} className="flex flex-wrap gap-2 items-center">
+            <form onSubmit={handleSearch} className="flex flex-col sm:flex-row flex-wrap gap-2 items-stretch sm:items-center">
               <Input
                 placeholder="Zip code (e.g. 92154)"
                 value={zip}
                 onChange={(e) => setZip(e.target.value.replace(/\D/g, "").slice(0, 5))}
-                className="max-w-[170px]"
+                className="w-full sm:max-w-[170px] min-h-[44px] focus:ring-2 focus:ring-blue-500"
+                aria-label="Zip code"
                 data-testid="input-zip"
               />
               <Select value={radius} onValueChange={setRadius}>
-                <SelectTrigger className="w-[110px]" data-testid="select-radius">
+                <SelectTrigger className="w-full sm:w-[110px] min-h-[44px] focus:ring-2 focus:ring-blue-500" aria-label="Search radius" data-testid="select-radius">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -237,39 +242,44 @@ export default function Stores() {
               <Button
                 type="submit"
                 disabled={searchMutation.isPending || !zip.trim()}
+                className="w-full sm:w-auto min-h-[44px] focus:ring-2 focus:ring-blue-500"
+                aria-label={searchMutation.isPending ? "Searching for stores" : "Search for stores"}
                 data-testid="button-search-stores"
               >
                 {searchMutation.isPending ? (
-                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" aria-hidden="true" />
                 ) : (
-                  <Search className="w-4 h-4 mr-1.5" />
+                  <Search className="w-4 h-4 mr-1.5" aria-hidden="true" />
                 )}
                 {searchMutation.isPending ? "Searching..." : "Search"}
               </Button>
             </form>
           </CardContent>
         </Card>
+        </section>
 
         {/* Search Results */}
         {hasSearched && (
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-3">
+          <section role="region" aria-label="Store search results" className="mb-8">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <h2 className="text-sm font-semibold">
                 Search Results ({filteredResults.length})
               </h2>
               {filteredResults.length > 0 && (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={selectAll}
-                    className={`text-xs hover:underline ${selectedStores.size < filteredResults.length ? "text-primary" : "text-muted-foreground"}`}
+                    className={`text-xs hover:underline min-h-[44px] px-1 focus:ring-2 focus:ring-blue-500 rounded ${selectedStores.size < filteredResults.length ? "text-primary" : "text-muted-foreground"}`}
+                    aria-label="Select all search results"
                     data-testid="button-select-all"
                   >
                     Select all
                   </button>
-                  <span className="text-muted-foreground/40">|</span>
+                  <span className="text-muted-foreground/40" aria-hidden="true">|</span>
                   <button
                     onClick={clearSelection}
-                    className={`text-xs hover:underline ${selectedStores.size > 0 ? "text-primary" : "text-muted-foreground"}`}
+                    className={`text-xs hover:underline min-h-[44px] px-1 focus:ring-2 focus:ring-blue-500 rounded ${selectedStores.size > 0 ? "text-primary" : "text-muted-foreground"}`}
+                    aria-label="Deselect all search results"
                     data-testid="button-clear-selection"
                   >
                     Deselect all
@@ -278,12 +288,14 @@ export default function Stores() {
                     size="sm"
                     onClick={handleAddSelected}
                     disabled={selectedStores.size === 0 || addMutation.isPending}
+                    className="min-h-[44px] focus:ring-2 focus:ring-blue-500"
+                    aria-label={`Add ${selectedStores.size > 0 ? selectedStores.size : ""} selected store${selectedStores.size !== 1 ? "s" : ""} to your list`}
                     data-testid="button-add-selected"
                   >
                     {addMutation.isPending ? (
-                      <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                      <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" aria-hidden="true" />
                     ) : (
-                      <Plus className="w-3.5 h-3.5 mr-1" />
+                      <Plus className="w-3.5 h-3.5 mr-1" aria-hidden="true" />
                     )}
                     Add {selectedStores.size > 0 ? `(${selectedStores.size})` : "selected"}
                   </Button>
@@ -291,6 +303,7 @@ export default function Stores() {
               )}
             </div>
 
+            <div aria-live="polite" aria-atomic="false">
             {filteredResults.length === 0 ? (
               <Card>
                 <CardContent className="py-8 flex flex-col items-center text-center">
@@ -308,7 +321,7 @@ export default function Stores() {
                   return (
                     <label
                       key={`${store.name}-${index}`}
-                      className={`flex items-center gap-3 px-4 py-3 rounded-lg border cursor-pointer transition-colors ${
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg border cursor-pointer transition-colors min-h-[44px] ${
                         isSelected
                           ? "bg-primary/5 border-primary/25"
                           : "bg-card border-border hover:bg-muted/50"
@@ -318,6 +331,7 @@ export default function Stores() {
                       <Checkbox
                         checked={isSelected}
                         onCheckedChange={() => toggleStore(index)}
+                        aria-label={`Select ${store.name}`}
                       />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium">{store.name}</p>
@@ -330,25 +344,29 @@ export default function Stores() {
                 })}
               </div>
             )}
-          </div>
+            </div>
+          </section>
         )}
 
         {/* Existing store list */}
-        <div className="flex items-center justify-between mb-3">
+        <section role="region" aria-label="Your stores">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <h2 className="text-sm font-semibold">Your Stores ({stores.length})</h2>
           {stores.length > 0 && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={selectAllMyStores}
-                className={`text-xs hover:underline ${selectedMyStores.size < stores.length ? "text-primary" : "text-muted-foreground"}`}
+                className={`text-xs hover:underline min-h-[44px] px-1 focus:ring-2 focus:ring-blue-500 rounded ${selectedMyStores.size < stores.length ? "text-primary" : "text-muted-foreground"}`}
+                aria-label="Select all your stores"
                 data-testid="button-select-all-my"
               >
                 Select all
               </button>
-              <span className="text-muted-foreground/40">|</span>
+              <span className="text-muted-foreground/40" aria-hidden="true">|</span>
               <button
                 onClick={clearMySelection}
-                className={`text-xs hover:underline ${selectedMyStores.size > 0 ? "text-primary" : "text-muted-foreground"}`}
+                className={`text-xs hover:underline min-h-[44px] px-1 focus:ring-2 focus:ring-blue-500 rounded ${selectedMyStores.size > 0 ? "text-primary" : "text-muted-foreground"}`}
+                aria-label="Deselect all your stores"
                 data-testid="button-deselect-all-my"
               >
                 Deselect all
@@ -359,12 +377,14 @@ export default function Stores() {
                   variant="destructive"
                   onClick={handleRemoveSelected}
                   disabled={bulkDeleteMutation.isPending}
+                  className="min-h-[44px] focus:ring-2 focus:ring-blue-500"
+                  aria-label={`Remove ${selectedMyStores.size} selected store${selectedMyStores.size !== 1 ? "s" : ""}`}
                   data-testid="button-remove-selected"
                 >
                   {bulkDeleteMutation.isPending ? (
-                    <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                    <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" aria-hidden="true" />
                   ) : (
-                    <Trash2 className="w-3.5 h-3.5 mr-1" />
+                    <Trash2 className="w-3.5 h-3.5 mr-1" aria-hidden="true" />
                   )}
                   Remove ({selectedMyStores.size})
                 </Button>
@@ -373,8 +393,9 @@ export default function Stores() {
           )}
         </div>
 
+        <div aria-live="polite" aria-atomic="false">
         {isLoading ? (
-          <div className="space-y-3">
+          <div className="space-y-3" role="status" aria-label="Loading stores">
             {[1, 2, 3].map((i) => (
               <Skeleton key={i} className="h-16 w-full rounded-lg" />
             ))}
@@ -382,8 +403,8 @@ export default function Stores() {
         ) : stores.length === 0 ? (
           <Card>
             <CardContent className="py-12 flex flex-col items-center text-center">
-              <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
-                <StoreIcon className="w-6 h-6 text-muted-foreground" />
+              <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4" aria-hidden="true">
+                <StoreIcon className="w-6 h-6 text-muted-foreground" aria-hidden="true" />
               </div>
               <h3 className="font-medium mb-1">No stores yet</h3>
               <p className="text-sm text-muted-foreground max-w-xs">
@@ -404,6 +425,7 @@ export default function Stores() {
                           <Checkbox
                             checked={isSelected}
                             onCheckedChange={() => toggleMyStore(store.id)}
+                            aria-label={`Select ${store.name} for removal`}
                             data-testid={`checkbox-my-store-${store.id}`}
                           />
                         </div>
@@ -411,17 +433,18 @@ export default function Stores() {
                           <p className="text-sm font-medium" data-testid={`text-store-name-${store.id}`}>{store.name}</p>
                           {store.location && (
                             <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                              <MapPin className="w-3 h-3 shrink-0" />
+                              <MapPin className="w-3 h-3 shrink-0" aria-hidden="true" />
                               {store.location}
                             </p>
                           )}
                           {store.address && (
                             <button
                               onClick={() => openInMaps(store.address!)}
-                              className="text-xs text-primary/70 hover:text-primary flex items-center gap-1 mt-0.5 hover:underline"
+                              className="text-xs text-primary/70 hover:text-primary flex items-center gap-1 mt-0.5 hover:underline focus:ring-2 focus:ring-blue-500 rounded"
+                              aria-label={`Open ${store.name} in Google Maps`}
                               data-testid={`link-address-${store.id}`}
                             >
-                              <Navigation className="w-3 h-3 shrink-0" />
+                              <Navigation className="w-3 h-3 shrink-0" aria-hidden="true" />
                               {store.address}
                             </button>
                           )}
@@ -430,12 +453,13 @@ export default function Stores() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                        className="h-8 w-8 min-h-[44px] min-w-[44px] text-muted-foreground hover:text-destructive shrink-0 focus:ring-2 focus:ring-blue-500"
                         onClick={() => deleteMutation.mutate(store.id)}
                         disabled={deleteMutation.isPending}
+                        aria-label={`Remove ${store.name}`}
                         data-testid={`button-delete-store-${store.id}`}
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4" aria-hidden="true" />
                       </Button>
                     </div>
                   </CardContent>
@@ -444,6 +468,8 @@ export default function Stores() {
             })}
           </div>
         )}
+        </div>
+        </section>
       </main>
     </div>
   );

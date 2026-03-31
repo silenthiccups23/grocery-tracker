@@ -11,116 +11,8 @@ import {
   setRapidApiKey, getRapidApiKey, hasRapidApiKey,
   searchCostcoProducts, type CostcoProduct,
 } from "./costco";
-
-// ---- Geocoding & Store Search Helpers ----
-
-interface FoundStore {
-  name: string;
-  address: string;
-  lat: number;
-  lon: number;
-}
-
-// Major US grocery chains with 10+ stores nationwide.
-// Matches against store name OR OSM brand tag (case-insensitive, partial match).
-const CHAIN_KEYWORDS: string[] = [
-  // Big-box / wholesale
-  "walmart", "target", "costco", "sam's club", "bj's wholesale",
-  // Major supermarket chains
-  "kroger", "ralphs", "fry's", "fred meyer", "king soopers", "smith's",
-  "albertsons", "safeway", "vons", "pavilions", "jewel-osco", "acme",
-  "shaw's", "star market", "randalls", "tom thumb",
-  "publix", "h-e-b", "heb", "meijer", "hy-vee",
-  "stop & shop", "giant", "giant eagle", "food lion", "hannaford",
-  "harris teeter", "wegmans", "market basket",
-  // Value / discount
-  "aldi", "lidl", "food 4 less", "grocery outlet", "save-a-lot",
-  "winco", "price chopper", "shoprite", "price rite", "piggly wiggly",
-  "food bazaar", "food city", "stater bros",
-  // Natural / specialty
-  "whole foods", "trader joe's", "sprouts", "natural grocers",
-  "fresh market", "earth fare", "fresh thyme",
-  // Warehouse / smart
-  "smart & final", "restaurant depot",
-  // Asian / international chains (10+ US locations)
-  "h mart", "99 ranch", "mitsuwa", "marukai", "tokyo central",
-  "ranch 99", "seafood city", "cardenas", "el super",
-  "fiesta mart", "northgate", "vallarta",
-  // Other large chains
-  "winn-dixie", "bi-lo", "ingles", "harveys",
-  "lucky", "nob hill", "raley's", "bel air",
-  "gelson's", "bristol farms",
-];
-
-function isChainStore(name: string, brand: string): boolean {
-  const lower = `${name} ${brand}`.toLowerCase();
-  return CHAIN_KEYWORDS.some(kw => lower.includes(kw));
-}
-
-async function geocodeZip(zip: string): Promise<{ lat: number; lon: number } | null> {
-  const url = `https://nominatim.openstreetmap.org/search?postalcode=${encodeURIComponent(zip)}&country=US&format=json&limit=1`;
-  const res = await fetch(url, {
-    headers: { "User-Agent": "GroceryTracker/1.0 (student-project)" },
-  });
-  if (!res.ok) return null;
-  const data = await res.json() as any[];
-  if (!data || data.length === 0) return null;
-  return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
-}
-
-async function searchStoresNearby(lat: number, lon: number, radiusMiles: number): Promise<FoundStore[]> {
-  const radiusMeters = Math.round(radiusMiles * 1609.34);
-  const query = `[out:json][timeout:25];(nwr["shop"="supermarket"](around:${radiusMeters},${lat},${lon});nwr["shop"="wholesale"](around:${radiusMeters},${lat},${lon}););out center;`;
-  const res = await fetch("https://overpass-api.de/api/interpreter", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `data=${encodeURIComponent(query)}`,
-  });
-  if (!res.ok) throw new Error("Store search service unavailable. Please try again.");
-  const data = await res.json() as any;
-  const elements: any[] = data.elements || [];
-
-  const results: FoundStore[] = [];
-
-  for (const el of elements) {
-    const tags = el.tags || {};
-    const name = tags.name || tags.brand || "Unknown Store";
-    const brand = tags.brand || "";
-    const elLat = el.lat ?? el.center?.lat;
-    const elLon = el.lon ?? el.center?.lon;
-    if (!elLat || !elLon) continue;
-
-    // Only include recognized chain stores (10+ locations)
-    if (!isChainStore(name, brand)) continue;
-
-    // Build address from OSM tags only (no slow reverse geocoding)
-    let address = "";
-    const num = tags["addr:housenumber"] || "";
-    const street = tags["addr:street"] || "";
-    const city = tags["addr:city"] || "";
-    const state = tags["addr:state"] || "";
-    const postcode = tags["addr:postcode"] || "";
-    if (street) {
-      const parts: string[] = [];
-      parts.push(num ? `${num} ${street}` : street);
-      if (city) parts.push(city);
-      if (state) parts.push(state);
-      if (postcode) parts.push(postcode);
-      address = parts.join(", ");
-    }
-
-    results.push({ name, address, lat: elLat, lon: elLon });
-  }
-
-  // Deduplicate by name+address (OSM sometimes has duplicate entries)
-  const seen = new Set<string>();
-  return results.filter(s => {
-    const key = `${s.name.toLowerCase()}|${s.address.toLowerCase()}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
+import { geocodeZip, searchStoresNearby, type FoundStore } from "./storeSearch";
+import { parseKrogerSize, parseCostcoSize, inferDefaultSize } from "./sizeParser";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -357,24 +249,19 @@ export async function registerRoutes(
         } catch {}
 
         if (krogerLocations.length > 0) {
-          // Smart store-to-location mapping:
-          // 1. Try to match by chain name (Ralphs → Ralphs location, Food 4 Less → Food4Less location)
-          // 2. Fall back to round-robin across all available locations
+          // Smart store-to-location mapping
           const storeLocIds: string[] = otherStores.map((store, i) => {
             const storeLower = store.name.toLowerCase();
-            // Try to find a Kroger location matching this store's chain
             const chainMatch = krogerLocations.find(loc =>
               storeLower.includes(loc.chain.toLowerCase().replace(/[0-9]/g, "").trim()) ||
               loc.chain.toLowerCase().includes(storeLower.replace(/[^a-z]/g, ""))
             );
-            // Also try matching by name (e.g. store "Ralphs" matches location name "Ralphs - Bonita")
             const nameMatch = !chainMatch ? krogerLocations.find(loc =>
               loc.name.toLowerCase().includes(storeLower) ||
               storeLower.includes(loc.name.toLowerCase().split(" - ")[0].toLowerCase())
             ) : null;
             const match = chainMatch || nameMatch;
             if (match) return match.locationId;
-            // No match — assign a location round-robin so every store still gets prices
             return krogerLocations[i % krogerLocations.length].locationId;
           });
           const uniqueLocIds = [...new Set(storeLocIds)];
@@ -394,14 +281,6 @@ export async function registerRoutes(
           const taskList = Array.from(uniqueTasks.values());
           const krogerCache = new Map<string, { price: number; size: number | null; unit: string | null }>();
 
-          // Build fallback search terms for items whose names might not be recognized
-          // e.g. "Winnies Organic" -> fallback to "sausage Organic" (using category as product type)
-          const categoryFallbacks: Record<string, string> = {
-            Meat: "meat", Dairy: "milk", Produce: "produce", Bakery: "bread",
-            Frozen: "frozen", Beverages: "drink", Snacks: "snack", Pantry: "pantry",
-            Household: "household", Other: "",
-          };
-
           const results = await Promise.allSettled(
             taskList.map(async ({ locId, term }) => {
               let products = await searchProducts(term, locId, 3);
@@ -411,13 +290,11 @@ export async function registerRoutes(
               if (priced.length === 0) {
                 const matchingItem = allItems.find((_, idx) => itemSearchTerms[idx] === term);
                 if (matchingItem) {
-                  // Try just the item name alone
                   const nameOnly = matchingItem.name;
                   if (nameOnly !== term) {
                     products = await searchProducts(nameOnly, locId, 3);
                     priced = products.filter(p => p.price !== null && p.price > 0);
                   }
-                  // Still nothing? Try category + tags as a generic search
                   if (priced.length === 0 && matchingItem.category) {
                     const tags = parseTags(matchingItem);
                     const fallbackTerm = [matchingItem.category, ...tags].join(" ");
@@ -431,13 +308,10 @@ export async function registerRoutes(
                 const product = priced[0];
                 const matchingItem = allItems.find((_, idx) => itemSearchTerms[idx] === term);
                 const defaultUnit = matchingItem?.defaultUnit || null;
-                // Try parsing size from the API's size field first
                 let sizeInfo = parseKrogerSize(product.size, defaultUnit);
-                // If size is missing, try extracting it from the product description
                 if (!sizeInfo.size && product.description) {
                   sizeInfo = parseKrogerSize(product.description, defaultUnit);
                 }
-                // If still no size, use a sensible default for common products
                 if (!sizeInfo.size && defaultUnit) {
                   const defaults = inferDefaultSize(matchingItem?.name || "", defaultUnit);
                   sizeInfo = { size: defaults.size, unit: defaults.unit || defaultUnit };
@@ -481,14 +355,12 @@ export async function registerRoutes(
 
       // --- Costco prices ---
       if (costcoStores.length > 0 && hasRapidApiKey()) {
-        // Deduplicate search terms — one Costco API call per unique item term
         const uniqueTerms = [...new Set(itemSearchTerms)];
         const costcoCache = new Map<string, { price: number; size: number | null; unit: string | null }>();
 
         const costcoResults = await Promise.allSettled(
           uniqueTerms.map(async (term) => {
             const products = await searchCostcoProducts(term);
-            // Find the first product with a price
             const priced = products.filter(p => p.price !== null && p.price > 0);
             if (priced.length > 0) {
               const product = priced[0];
@@ -555,170 +427,4 @@ export async function registerRoutes(
   })();
 
   return httpServer;
-}
-
-// Units that are always measured in liquid volumes — bare "oz" should become "fl oz"
-const LIQUID_UNITS = new Set(["fl oz", "gal", "L"]);
-// Units that are always counts — ignore weight-based matches entirely
-const COUNT_UNITS = new Set(["ct"]);
-
-// Helper to parse Kroger's size strings like "1 gal", "1/2 Gallon", "64 fl oz"
-// Uses the item's defaultUnit to disambiguate: if the item is a liquid (defaultUnit = "fl oz"),
-// bare "oz" is treated as "fl oz". If the item is counted (defaultUnit = "ct"),
-// weight-based matches (oz, lb) are skipped.
-function parseKrogerSize(sizeStr: string, defaultUnit: string | null): { size: number | null; unit: string | null } {
-  if (!sizeStr) return { size: null, unit: defaultUnit };
-  const s = sizeStr.toLowerCase().trim();
-  const isLiquid = LIQUID_UNITS.has(defaultUnit || "");
-  const isCount = COUNT_UNITS.has(defaultUnit || "");
-
-  // Common patterns
-  const patterns: Array<{ regex: RegExp; handler: (m: RegExpMatchArray) => { size: number; unit: string } | null }> = [
-    { regex: /^(\d+\.?\d*)\s*gal/i, handler: m => ({ size: parseFloat(m[1]) * 128, unit: "fl oz" }) },
-    { regex: /^1\/2\s*gal/i, handler: () => ({ size: 64, unit: "fl oz" }) },
-    { regex: /^half\s*gal/i, handler: () => ({ size: 64, unit: "fl oz" }) },
-    { regex: /^(\d+\.?\d*)\s*fl\.?\s*oz/i, handler: m => ({ size: parseFloat(m[1]), unit: "fl oz" }) },
-    // Bare "oz": for liquids → fl oz; for count items → skip
-    { regex: /^(\d+\.?\d*)\s*oz/i, handler: m => {
-      if (isCount) return null; // skip oz for count-based items like eggs
-      return { size: parseFloat(m[1]), unit: isLiquid ? "fl oz" : "oz" };
-    }},
-    // "lb": skip for liquids and count items
-    { regex: /^(\d+\.?\d*)\s*lb/i, handler: m => {
-      if (isLiquid || isCount) return null;
-      return { size: parseFloat(m[1]), unit: "lb" };
-    }},
-    { regex: /^(\d+\.?\d*)\s*ct/i, handler: m => ({ size: parseFloat(m[1]), unit: "ct" }) },
-    { regex: /^(\d+\.?\d*)\s*count/i, handler: m => ({ size: parseFloat(m[1]), unit: "ct" }) },
-    { regex: /^(\d+\.?\d*)\s*l(?:iter)?/i, handler: m => ({ size: parseFloat(m[1]), unit: "L" }) },
-  ];
-
-  for (const { regex, handler } of patterns) {
-    const match = s.match(regex);
-    if (match) {
-      const result = handler(match);
-      if (result) return result;
-    }
-  }
-
-  return { size: null, unit: defaultUnit };
-}
-
-// Helper to parse Costco size strings. Costco product names often include sizes like
-// "Kirkland Signature Organic Whole Milk, 1 Gallon, 2-count"
-// Same category-awareness as parseKrogerSize.
-function parseCostcoSize(sizeStr: string, defaultUnit: string | null): { size: number | null; unit: string | null } {
-  if (!sizeStr) return { size: null, unit: defaultUnit };
-  const s = sizeStr.toLowerCase();
-  const isLiquid = LIQUID_UNITS.has(defaultUnit || "");
-  const isCount = COUNT_UNITS.has(defaultUnit || "");
-
-  // Costco-specific patterns (often embedded in product names)
-  const patterns: Array<{ regex: RegExp; handler: (m: RegExpMatchArray) => { size: number; unit: string } | null }> = [
-    // "2 x 1 gallon", "2-count, 1 gallon" etc.
-    { regex: /(\d+)\s*x\s*(\d+\.?\d*)\s*gal/i, handler: m => ({ size: parseInt(m[1]) * parseFloat(m[2]) * 128, unit: "fl oz" }) },
-    { regex: /(\d+\.?\d*)\s*gal/i, handler: m => ({ size: parseFloat(m[1]) * 128, unit: "fl oz" }) },
-    { regex: /half\s*gal/i, handler: () => ({ size: 64, unit: "fl oz" }) },
-    { regex: /1\/2\s*gal/i, handler: () => ({ size: 64, unit: "fl oz" }) },
-    { regex: /(\d+\.?\d*)\s*fl\.?\s*oz/i, handler: m => ({ size: parseFloat(m[1]), unit: "fl oz" }) },
-    { regex: /(\d+\.?\d*)\s*oz/i, handler: m => {
-      if (isCount) return null;
-      return { size: parseFloat(m[1]), unit: isLiquid ? "fl oz" : "oz" };
-    }},
-    { regex: /(\d+\.?\d*)\s*lb/i, handler: m => {
-      if (isLiquid || isCount) return null;
-      return { size: parseFloat(m[1]), unit: "lb" };
-    }},
-    { regex: /(\d+\.?\d*)\s*ct|count/i, handler: m => ({ size: parseFloat(m[1]), unit: "ct" }) },
-    { regex: /(\d+\.?\d*)\s*l(?:iter)?(?:s)?\b/i, handler: m => ({ size: parseFloat(m[1]), unit: "L" }) },
-    { regex: /(\d+\.?\d*)\s*kg/i, handler: m => {
-      if (isLiquid || isCount) return null;
-      return { size: parseFloat(m[1]) * 2.205, unit: "lb" };
-    }},
-  ];
-
-  for (const { regex, handler } of patterns) {
-    const match = s.match(regex);
-    if (match) {
-      const result = handler(match);
-      if (result) return result;
-    }
-  }
-
-  return { size: null, unit: defaultUnit };
-}
-
-/**
- * Infer a reasonable default size for a product when the API doesn't provide one.
- * Based on common grocery product sizes.
- */
-function inferDefaultSize(productName: string, defaultUnit: string): { size: number | null; unit: string | null } {
-  const lower = productName.toLowerCase();
-
-  // Common product default sizes
-  const defaults: Array<{ keywords: string[]; size: number; unit: string }> = [
-    // Dairy liquids
-    { keywords: ["milk"], size: 128, unit: "fl oz" },         // 1 gallon
-    { keywords: ["cream", "creamer"], size: 32, unit: "fl oz" }, // 1 quart
-    { keywords: ["yogurt"], size: 32, unit: "oz" },            // 32 oz tub
-    // Eggs
-    { keywords: ["eggs", "egg"], size: 12, unit: "ct" },       // 1 dozen
-    // Cheese
-    { keywords: ["cheese"], size: 8, unit: "oz" },             // 8 oz block/bag
-    { keywords: ["butter"], size: 16, unit: "oz" },            // 1 lb
-    // Produce
-    { keywords: ["bananas", "banana"], size: 1, unit: "lb" },
-    { keywords: ["apples", "apple"], size: 1, unit: "lb" },
-    { keywords: ["oranges", "orange"], size: 1, unit: "lb" },
-    { keywords: ["tomato"], size: 1, unit: "lb" },
-    { keywords: ["potato"], size: 5, unit: "lb" },
-    { keywords: ["onion"], size: 1, unit: "lb" },
-    // Meat
-    { keywords: ["chicken breast", "chicken thigh"], size: 1, unit: "lb" },
-    { keywords: ["ground beef", "ground turkey"], size: 1, unit: "lb" },
-    { keywords: ["steak"], size: 1, unit: "lb" },
-    { keywords: ["bacon"], size: 16, unit: "oz" },
-    { keywords: ["hot dog"], size: 8, unit: "ct" },
-    { keywords: ["sausage"], size: 16, unit: "oz" },
-    { keywords: ["salmon", "tilapia", "shrimp"], size: 1, unit: "lb" },
-    // Bakery
-    { keywords: ["bread"], size: 20, unit: "oz" },
-    { keywords: ["tortilla"], size: 10, unit: "ct" },
-    { keywords: ["bagel"], size: 6, unit: "ct" },
-    { keywords: ["bun"], size: 8, unit: "ct" },
-    // Beverages
-    { keywords: ["water"], size: 128, unit: "fl oz" },         // 1 gallon
-    { keywords: ["juice", "orange juice", "apple juice"], size: 64, unit: "fl oz" }, // half gallon
-    { keywords: ["soda", "cola"], size: 144, unit: "fl oz" },  // 12-pack
-    { keywords: ["coffee"], size: 12, unit: "oz" },
-    // Pantry
-    { keywords: ["rice"], size: 32, unit: "oz" },              // 2 lb bag
-    { keywords: ["pasta", "spaghetti"], size: 16, unit: "oz" }, // 1 lb box
-    { keywords: ["beans"], size: 15, unit: "oz" },             // standard can
-    { keywords: ["cereal"], size: 18, unit: "oz" },
-    { keywords: ["soup"], size: 10.75, unit: "oz" },           // standard can
-    { keywords: ["peanut butter"], size: 16, unit: "oz" },
-    { keywords: ["olive oil", "cooking oil"], size: 16, unit: "fl oz" },
-    { keywords: ["flour"], size: 80, unit: "oz" },             // 5 lb
-    { keywords: ["sugar"], size: 64, unit: "oz" },             // 4 lb
-    // Snacks
-    { keywords: ["chips"], size: 10, unit: "oz" },
-    { keywords: ["crackers"], size: 8, unit: "oz" },
-    { keywords: ["cookies"], size: 13, unit: "oz" },
-    { keywords: ["popcorn"], size: 8, unit: "oz" },
-    // Household
-    { keywords: ["paper towel"], size: 6, unit: "ct" },
-    { keywords: ["toilet paper"], size: 12, unit: "ct" },
-    { keywords: ["trash bag"], size: 40, unit: "ct" },
-    { keywords: ["dish soap"], size: 22, unit: "fl oz" },
-    { keywords: ["detergent"], size: 100, unit: "fl oz" },
-  ];
-
-  for (const d of defaults) {
-    if (d.keywords.some(kw => lower.includes(kw))) {
-      return { size: d.size, unit: d.unit };
-    }
-  }
-
-  return { size: null, unit: defaultUnit };
 }

@@ -7,280 +7,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Store as StoreIcon, ShoppingCart, DollarSign, TrendingDown, ChevronDown, Filter, Ruler, ExternalLink, RefreshCw, Loader2 } from "lucide-react";
+import { Store as StoreIcon, ShoppingCart, DollarSign, TrendingDown, ExternalLink, RefreshCw, Loader2 } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-
-// --- Store product link generation ---
-// Links directly to the store's own product search page.
-// These URLs work when a real user clicks them from their normal browser.
-const STORE_SEARCH_URLS: Array<{ keyword: string; urlTemplate: string }> = [
-  // Albertsons / Safeway family
-  { keyword: "albertsons", urlTemplate: "https://www.albertsons.com/shop/search-results.html?q={q}" },
-  { keyword: "vons", urlTemplate: "https://www.vons.com/shop/search-results.html?q={q}" },
-  { keyword: "pavilions", urlTemplate: "https://www.pavilions.com/shop/search-results.html?q={q}" },
-  { keyword: "safeway", urlTemplate: "https://www.safeway.com/shop/search-results.html?q={q}" },
-  { keyword: "jewel", urlTemplate: "https://www.jewelosco.com/shop/search-results.html?q={q}" },
-  { keyword: "shaw", urlTemplate: "https://www.shaws.com/shop/search-results.html?q={q}" },
-  { keyword: "acme", urlTemplate: "https://www.acmemarkets.com/shop/search-results.html?q={q}" },
-  // Kroger family
-  { keyword: "ralphs", urlTemplate: "https://www.ralphs.com/search?query={q}&searchType=default_search" },
-  { keyword: "kroger", urlTemplate: "https://www.kroger.com/search?query={q}&searchType=default_search" },
-  { keyword: "food 4 less", urlTemplate: "https://www.food4less.com/search?query={q}&searchType=default_search" },
-  { keyword: "fry", urlTemplate: "https://www.frysfood.com/search?query={q}&searchType=default_search" },
-  { keyword: "fred meyer", urlTemplate: "https://www.fredmeyer.com/search?query={q}&searchType=default_search" },
-  { keyword: "king soopers", urlTemplate: "https://www.kingsoopers.com/search?query={q}&searchType=default_search" },
-  { keyword: "smith", urlTemplate: "https://www.smithsfoodanddrug.com/search?query={q}&searchType=default_search" },
-  // Big-box / wholesale
-  { keyword: "walmart", urlTemplate: "https://www.walmart.com/search?q={q}" },
-  { keyword: "target", urlTemplate: "https://www.target.com/s?searchTerm={q}" },
-  { keyword: "costco", urlTemplate: "https://www.costco.com/CatalogSearch?dept=All&keyword={q}" },
-  { keyword: "sam's club", urlTemplate: "https://www.samsclub.com/s/{q}" },
-  { keyword: "bj's", urlTemplate: "https://www.bjs.com/search/{q}" },
-  // Specialty / natural
-  { keyword: "trader joe", urlTemplate: "https://www.traderjoes.com/home/search?q={q}&section=products" },
-  { keyword: "whole foods", urlTemplate: "https://www.wholefoodsmarket.com/search?text={q}" },
-  { keyword: "sprouts", urlTemplate: "https://shop.sprouts.com/store/sprouts/s?k={q}" },
-  { keyword: "natural grocers", urlTemplate: "https://www.naturalgrocers.com/search?keywords={q}" },
-  // Value / discount
-  { keyword: "aldi", urlTemplate: "https://www.aldi.us/products/?search={q}" },
-  { keyword: "grocery outlet", urlTemplate: "https://www.groceryoutlet.com/search?q={q}" },
-  { keyword: "smart & final", urlTemplate: "https://www.smartandfinal.com/search?q={q}" },
-  { keyword: "winco", urlTemplate: "https://www.wincofoods.com/products/search?q={q}" },
-  // International
-  { keyword: "h mart", urlTemplate: "https://www.hmart.com/search?q={q}" },
-  { keyword: "99 ranch", urlTemplate: "https://www.99ranch.com/search?keyword={q}" },
-  { keyword: "mitsuwa", urlTemplate: "https://mitsuwa.com/search?q={q}" },
-  // Regional
-  { keyword: "publix", urlTemplate: "https://www.publix.com/shop/search?query={q}" },
-  { keyword: "h-e-b", urlTemplate: "https://www.heb.com/search/?q={q}" },
-  { keyword: "meijer", urlTemplate: "https://www.meijer.com/shopping/search.html?text={q}" },
-  { keyword: "wegmans", urlTemplate: "https://shop.wegmans.com/search?search_term={q}" },
-  { keyword: "stop & shop", urlTemplate: "https://stopandshop.com/search?query={q}" },
-  { keyword: "giant", urlTemplate: "https://giantfood.com/search?query={q}" },
-  { keyword: "food lion", urlTemplate: "https://shop.foodlion.com/search?search_term={q}" },
-  { keyword: "harris teeter", urlTemplate: "https://www.harristeeter.com/search?query={q}" },
-  { keyword: "gelson", urlTemplate: "https://www.gelsons.com/shop#!/?q={q}" },
-  { keyword: "stater bros", urlTemplate: "https://www.staterbros.com/search?q={q}" },
-  { keyword: "northgate", urlTemplate: "https://shop.northgatemarket.com/store/northgate-market/s?k={q}" },
-  { keyword: "cardenas", urlTemplate: "https://shop.cardenasmarkets.com/search?search_term={q}" },
-  { keyword: "vallarta", urlTemplate: "https://shop.vallartasupermarkets.com/search?search_term={q}" },
-];
-
-function getStoreProductUrl(storeName: string, productName: string, tags: string[]): string {
-  const lowerStore = storeName.toLowerCase();
-  const query = [productName, ...tags].join(" ");
-  const encoded = encodeURIComponent(query);
-
-  for (const entry of STORE_SEARCH_URLS) {
-    if (lowerStore.includes(entry.keyword)) {
-      return entry.urlTemplate.replace("{q}", encoded);
-    }
-  }
-  // Fallback: search on the store's own website via Google
-  return `https://www.google.com/search?q=${encodeURIComponent(`${query} ${storeName}`)}+grocery+price`;
-}
-
-/**
- * Navigate to an external URL. Uses top-level navigation to escape
- * nested iframes (Perplexity deploys sites inside double-nested iframes,
- * and iOS Safari blocks target="_blank" popups from within them).
- */
-function navigateToStore(url: string, e: React.MouseEvent) {
-  e.preventDefault();
-  // Try to navigate the topmost window so we escape all iframe layers
-  try {
-    if (window.top && window.top !== window) {
-      window.top.location.href = url;
-      return;
-    }
-  } catch {
-    // Cross-origin — top is not accessible
-  }
-  // Try parent
-  try {
-    if (window.parent && window.parent !== window) {
-      window.parent.location.href = url;
-      return;
-    }
-  } catch {}
-  // Direct navigation as last resort
-  window.location.href = url;
-}
-
-// A product group is items that share the same name (e.g. all "Milk" entries)
-interface ProductGroup {
-  productName: string;
-  category: string;
-  allTags: string[];
-  items: Array<{ item: Item; tags: string[] }>;
-}
-
-// A size key is "size|unit" e.g. "128|fl oz" for dedup/filtering
-function sizeKey(size: number | null, unit: string | null): string {
-  if (!size || !unit) return "";
-  return `${size}|${unit}`;
-}
-
-function parseSizeKey(key: string): { size: number; unit: string } | null {
-  const [s, u] = key.split("|");
-  if (!s || !u) return null;
-  return { size: parseFloat(s), unit: u };
-}
-
-function TagMultiSelect({
-  allTags,
-  selectedTags,
-  onToggle,
-  onClear,
-}: {
-  allTags: string[];
-  selectedTags: Set<string>;
-  onToggle: (tag: string) => void;
-  onClear: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const selectedCount = allTags.filter((t) => selectedTags.has(t)).length;
-  const selectedLabels = allTags
-    .filter((t) => selectedTags.has(t))
-    .join(", ");
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 text-xs justify-between min-w-[140px] max-w-[280px]"
-          data-testid="button-tag-filter"
-        >
-          <Filter className="w-3 h-3 mr-1.5 shrink-0 opacity-50" />
-          <span className="truncate text-left">
-            {selectedCount === 0
-              ? "Filter by type..."
-              : selectedLabels}
-          </span>
-          <ChevronDown className="w-3.5 h-3.5 ml-1.5 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-52 p-2" align="start">
-        <p className="text-xs font-medium text-muted-foreground px-2 mb-1.5">
-          Must match ALL selected
-        </p>
-        <div className="space-y-1">
-          {allTags.map((tag) => {
-            const isChecked = selectedTags.has(tag);
-            return (
-              <label
-                key={tag}
-                className="flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-accent cursor-pointer text-sm"
-                data-testid={`checkbox-tag-${tag}`}
-              >
-                <Checkbox
-                  checked={isChecked}
-                  onCheckedChange={() => onToggle(tag)}
-                />
-                <span className={isChecked ? "font-medium" : ""}>{tag}</span>
-              </label>
-            );
-          })}
-        </div>
-        {selectedCount > 0 && (
-          <div className="border-t border-border mt-1.5 pt-1.5 px-2">
-            <button
-              className="text-xs text-primary hover:underline"
-              onClick={onClear}
-              data-testid="button-clear-filter"
-            >
-              Clear filter
-            </button>
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function SizeMultiSelect({
-  allSizes,
-  selectedSizes,
-  onToggle,
-  onClear,
-}: {
-  allSizes: string[]; // sizeKey strings
-  selectedSizes: Set<string>;
-  onToggle: (key: string) => void;
-  onClear: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const selectedCount = allSizes.filter((s) => selectedSizes.has(s)).length;
-  const selectedLabels = allSizes
-    .filter((s) => selectedSizes.has(s))
-    .map((s) => {
-      const parsed = parseSizeKey(s);
-      return parsed ? formatSize(parsed.size, parsed.unit) : s;
-    })
-    .join(", ");
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 text-xs justify-between min-w-[120px] max-w-[240px]"
-          data-testid="button-size-filter"
-        >
-          <Ruler className="w-3 h-3 mr-1.5 shrink-0 opacity-50" />
-          <span className="truncate text-left">
-            {selectedCount === 0
-              ? "Filter by size..."
-              : selectedLabels}
-          </span>
-          <ChevronDown className="w-3.5 h-3.5 ml-1.5 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-48 p-2" align="start">
-        <p className="text-xs font-medium text-muted-foreground px-2 mb-1.5">
-          Show selected sizes
-        </p>
-        <div className="space-y-1">
-          {allSizes.map((sk) => {
-            const parsed = parseSizeKey(sk);
-            const label = parsed ? formatSize(parsed.size, parsed.unit) : sk;
-            const isChecked = selectedSizes.has(sk);
-            return (
-              <label
-                key={sk}
-                className="flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-accent cursor-pointer text-sm"
-                data-testid={`checkbox-size-${sk}`}
-              >
-                <Checkbox
-                  checked={isChecked}
-                  onCheckedChange={() => onToggle(sk)}
-                />
-                <span className={isChecked ? "font-medium" : ""}>{label}</span>
-              </label>
-            );
-          })}
-        </div>
-        {selectedCount > 0 && (
-          <div className="border-t border-border mt-1.5 pt-1.5 px-2">
-            <button
-              className="text-xs text-primary hover:underline"
-              onClick={onClear}
-              data-testid="button-clear-size-filter"
-            >
-              Clear filter
-            </button>
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
-  );
-}
+import { getStoreProductUrl, navigateToStore } from "@/lib/storeLinks";
+import { type ProductGroup, sizeKey, parseSizeKey } from "@/lib/priceUtils";
+import { TagMultiSelect, SizeMultiSelect } from "@/components/FilterSelects";
 
 export default function Dashboard() {
   const { toast } = useToast();
@@ -484,21 +216,28 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Skip to main content — visible on focus for keyboard users */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:ring-2 focus:ring-blue-500"
+      >
+        Skip to main content
+      </a>
       {/* Header */}
-      <header className="border-b border-border bg-card">
+      <header className="border-b border-border bg-card" role="banner">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
+            <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center" aria-hidden="true">
               <ShoppingCart className="w-5 h-5 text-primary-foreground" />
             </div>
             <h1 className="text-lg font-semibold tracking-tight" data-testid="text-app-title">GroceryTrack</h1>
           </div>
-          <nav className="flex items-center gap-1">
+          <nav className="flex items-center gap-1" aria-label="Main navigation">
             <Link href="/stores">
-              <Button variant="ghost" size="sm" data-testid="link-stores">Stores</Button>
+              <Button variant="ghost" size="sm" data-testid="link-stores" aria-label="Manage stores">Stores</Button>
             </Link>
             <Link href="/items">
-              <Button variant="ghost" size="sm" data-testid="link-items">Items</Button>
+              <Button variant="ghost" size="sm" data-testid="link-items" aria-label="Manage tracked items">Items</Button>
             </Link>
             <Button
               variant="outline"
@@ -506,11 +245,13 @@ export default function Dashboard() {
               onClick={() => fetchPricesMutation.mutate()}
               disabled={fetchPricesMutation.isPending}
               data-testid="button-fetch-prices"
+              aria-label={fetchPricesMutation.isPending ? "Fetching latest prices from stores, please wait" : "Fetch latest prices from stores"}
+              className="focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
             >
               {fetchPricesMutation.isPending ? (
-                <Loader2 className="w-4 h-4 sm:mr-1 animate-spin" />
+                <Loader2 className="w-4 h-4 sm:mr-1 animate-spin" aria-hidden="true" />
               ) : (
-                <RefreshCw className="w-4 h-4 sm:mr-1" />
+                <RefreshCw className="w-4 h-4 sm:mr-1" aria-hidden="true" />
               )}
               <span className="hidden sm:inline">{fetchPricesMutation.isPending ? "Fetching..." : "Fetch Prices"}</span>
             </Button>
@@ -519,13 +260,17 @@ export default function Dashboard() {
       </header>
 
       {/* Main content */}
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+      <main id="main-content" className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
         {/* Stats row */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          <Card>
+        <div
+          className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8"
+          role="region"
+          aria-label="Summary statistics"
+        >
+          <Card aria-label={`${totalStores} stores tracked`}>
             <CardContent className="pt-5 pb-4 px-5">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center" aria-hidden="true">
                   <StoreIcon className="w-4 h-4 text-primary" />
                 </div>
                 <div>
@@ -537,10 +282,10 @@ export default function Dashboard() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card aria-label={`${uniqueItems} items tracked`}>
             <CardContent className="pt-5 pb-4 px-5">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center" aria-hidden="true">
                   <ShoppingCart className="w-4 h-4 text-primary" />
                 </div>
                 <div>
@@ -552,10 +297,10 @@ export default function Dashboard() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card aria-label={`${totalEntries} price entries recorded`}>
             <CardContent className="pt-5 pb-4 px-5">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center" aria-hidden="true">
                   <DollarSign className="w-4 h-4 text-primary" />
                 </div>
                 <div>
@@ -570,7 +315,13 @@ export default function Dashboard() {
         </div>
 
         {/* Price Comparison */}
-        <div className="mb-6">
+        <div
+          className="mb-6"
+          role="region"
+          aria-label="Price comparison"
+          aria-live="polite"
+          aria-atomic="false"
+        >
           <div className="flex items-center justify-between mb-1">
             <h2 className="text-base font-semibold">Price Comparison</h2>
           </div>
@@ -587,7 +338,7 @@ export default function Dashboard() {
           ) : comparisonData.length === 0 ? (
             <Card>
               <CardContent className="py-12 flex flex-col items-center text-center">
-                <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
+                <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4" aria-hidden="true">
                   <TrendingDown className="w-6 h-6 text-muted-foreground" />
                 </div>
                 <h3 className="font-medium mb-1">No items tracked yet</h3>
@@ -596,10 +347,10 @@ export default function Dashboard() {
                 </p>
                 <div className="flex gap-2">
                   <Link href="/stores">
-                    <Button variant="outline" size="sm" data-testid="button-add-store-empty">Add a store</Button>
+                    <Button variant="outline" size="sm" data-testid="button-add-store-empty" aria-label="Add a grocery store to track">Add a store</Button>
                   </Link>
                   <Link href="/items">
-                    <Button size="sm" data-testid="button-add-item-empty">Add an item</Button>
+                    <Button size="sm" data-testid="button-add-item-empty" aria-label="Add a grocery item to track">Add an item</Button>
                   </Link>
                 </div>
               </CardContent>
@@ -610,10 +361,13 @@ export default function Dashboard() {
                 const selectedTags = getSelectedTags(group.productName);
                 const selectedSizes = getSelectedSizes(group.productName);
                 return (
-                  <Card key={group.productName}>
-                    <CardContent className="py-4 px-5">
+                  <Card
+                    key={group.productName}
+                    aria-label={`Price comparison for ${group.productName}${cheapestStore ? `, cheapest at ${cheapestStore.name}` : ''}`}
+                  >
+                    <CardContent className="py-4 px-3 sm:px-5">
                       {/* Product header: name + category badge + filters */}
-                      <div className="flex items-start justify-between mb-3">
+                      <div className="flex flex-wrap items-start justify-between mb-3 gap-2">
                         <div>
                           <p className="font-medium" data-testid={`text-product-name-${group.productName}`}>
                             {group.productName}
@@ -641,7 +395,10 @@ export default function Dashboard() {
                           </div>
                         </div>
                         {cheapestEntry && cheapestStore && (
-                          <div className="text-right shrink-0 ml-4">
+                          <div
+                            className="text-right shrink-0"
+                            aria-label={`Best price: ${cheapestEntry.unitPrice !== null ? formatUnitPrice(cheapestEntry.unitPrice, cheapestEntry.unit!) : `$${cheapestEntry.price.toFixed(2)}`} at ${cheapestStore.name}`}
+                          >
                             {cheapestEntry.unitPrice !== null ? (
                               <>
                                 <p className="text-lg font-semibold text-primary tabular-nums">
@@ -736,7 +493,7 @@ export default function Dashboard() {
                                         rel="noopener noreferrer"
                                         onClick={(e) => { if (productUrl) navigateToStore(productUrl, e); }}
                                         aria-label={`${store?.name}: $${pd.price.toFixed(2)}${sizeLabel ? ` per ${sizeLabel}` : ''}${isCheapest ? ' — Best price' : ''}. Tap to view on store website.`}
-                                        className={`group text-xs px-3 py-2.5 rounded-lg inline-flex items-center gap-1.5 cursor-pointer border-2 transition-all duration-150 hover:shadow-md hover:-translate-y-[1px] no-underline ${
+                                        className={`group text-xs px-3 py-2.5 rounded-lg inline-flex items-center gap-1.5 cursor-pointer border-2 transition-all duration-150 hover:shadow-md hover:-translate-y-[1px] no-underline focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
                                           isCheapest
                                             ? "bg-blue-600 text-white font-semibold border-blue-700 hover:bg-blue-700 shadow-sm"
                                             : "bg-muted text-muted-foreground border-transparent hover:border-border hover:bg-muted/80"
@@ -759,7 +516,7 @@ export default function Dashboard() {
                                             </span>
                                           )}
                                         </span>
-                                        <ExternalLink className={`w-3.5 h-3.5 shrink-0 transition-opacity ${isCheapest ? 'opacity-80' : 'opacity-50 group-hover:opacity-100'}`} />
+                                        <ExternalLink className={`w-3.5 h-3.5 shrink-0 transition-opacity ${isCheapest ? 'opacity-80' : 'opacity-50 group-hover:opacity-100'}`} aria-hidden="true" />
                                       </a>
                                     );
                                   })}
@@ -779,7 +536,7 @@ export default function Dashboard() {
 
         {/* Recent price entries */}
         {prices.length > 0 && (
-          <div>
+          <div role="region" aria-label="Recent price entries">
             <h2 className="text-base font-semibold mb-4">Recent Entries</h2>
             <Card>
               <CardContent className="p-0">
@@ -821,7 +578,7 @@ export default function Dashboard() {
         )}
       </main>
 
-      <footer className="max-w-5xl mx-auto px-4 sm:px-6 py-6 border-t border-border">
+      <footer className="max-w-5xl mx-auto px-4 sm:px-6 py-6 border-t border-border" role="contentinfo">
         <p className="text-[10px] text-muted-foreground/50 text-center leading-relaxed max-w-2xl mx-auto">
           Disclaimer: All prices displayed are estimates based on publicly available data and may not reflect actual in-store prices. Prices vary by store location, time of purchase, and ongoing promotions. GroceryTrack does not guarantee the accuracy of any pricing information. Always verify prices directly with the retailer before making purchasing decisions.
         </p>

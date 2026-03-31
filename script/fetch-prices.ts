@@ -206,7 +206,15 @@ async function main() {
   }
 
   console.log(`🏪 Stores: ${allStores.map(s => s.name).join(", ")}`);
-  console.log(`📦 Items: ${allItems.length} products to check\n`);
+  console.log(`📦 Items: ${allItems.length} products to check`);
+
+  // Clear today's prices to avoid duplicates if this script runs more than once
+  const existingToday = await db.select().from(priceEntries).where(eq(priceEntries.date, today));
+  if (existingToday.length > 0) {
+    console.log(`🧹 Clearing ${existingToday.length} existing prices for today (safe re-run)`);
+    await db.delete(priceEntries).where(eq(priceEntries.date, today));
+  }
+  console.log("");
 
   // Separate Costco from other stores (Costco uses a different API)
   const costcoStores = allStores.filter(s => s.name.toLowerCase().includes("costco"));
@@ -314,9 +322,6 @@ async function main() {
       console.log("\n⚠️  Skipping Costco — no RAPIDAPI_KEY set.");
     }
   }
-
-  // --- Clear old prices for today (avoid duplicates on re-run) ---
-  // We already inserted new ones above; this is fine since we fetch fresh every time
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`\n✅ Done! Added ${pricesAdded} prices in ${elapsed}s`);
