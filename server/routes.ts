@@ -93,7 +93,71 @@ export async function registerRoutes(
     res.status(204).send();
   });
 
-  // === ITEMS ===
+  // === PRODUCTS (collected by Pi) ===
+  app.get("/api/products", async (req, res) => {
+    const { chain, category, search, limit, offset } = req.query;
+    const products = await storage.getProducts({
+      chain: chain as string,
+      category: category as string,
+      search: search as string,
+      limit: limit ? parseInt(limit as string) : 50,
+      offset: offset ? parseInt(offset as string) : 0,
+    });
+    const total = await storage.getProductCount({
+      chain: chain as string,
+      category: category as string,
+      search: search as string,
+    });
+    res.json({ products, total });
+  });
+
+  app.get("/api/products/:id", async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+    const product = await storage.getProduct(id);
+    if (!product) return res.status(404).json({ error: "Product not found" });
+    res.json(product);
+  });
+
+  app.get("/api/products/:id/prices", async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+    const prices = await storage.getLatestPrices(id);
+    res.json(prices);
+  });
+
+  // === COLLECTOR STATUS ===
+  app.get("/api/collector/status", async (_req, res) => {
+    const runs = await storage.getLatestCollectorRuns();
+    res.json(runs);
+  });
+
+  // === WATCHLIST ===
+  app.get("/api/watchlist", async (_req, res) => {
+    const list = await storage.getWatchlist();
+    res.json(list);
+  });
+
+  app.post("/api/watchlist", async (req, res) => {
+    const { productName, category, tags, defaultUnit } = req.body;
+    if (!productName?.trim()) return res.status(400).json({ error: "Product name is required" });
+    const item = await storage.createWatchlistItem({
+      productName: productName.trim(),
+      category: category || null,
+      tags: tags || null,
+      defaultUnit: defaultUnit || null,
+    });
+    res.status(201).json(item);
+  });
+
+  app.delete("/api/watchlist/:id", async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+    await storage.deleteWatchlistItem(id);
+    res.status(204).send();
+  });
+
+  // === ITEMS (legacy) ===
   app.get("/api/items", async (_req, res) => {
     const itemList = await storage.getItems();
     res.json(itemList);
@@ -187,7 +251,7 @@ export async function registerRoutes(
   app.get("/api/alerts/item/:itemId", async (req, res) => {
     const itemId = parseInt(req.params.itemId);
     if (isNaN(itemId)) return res.status(400).json({ error: "Invalid ID" });
-    const alerts = await storage.getPriceAlertsByItem(itemId);
+    const alerts = await storage.getPriceAlertsByWatchlistItem(itemId);
     res.json(alerts);
   });
 

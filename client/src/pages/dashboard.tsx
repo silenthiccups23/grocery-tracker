@@ -330,49 +330,30 @@ export default function Dashboard() {
             </div>
             <div className="space-y-2">
               {alerts.filter(a => a.lastTriggered).map((alert) => {
-                const item = items.find(i => i.id === alert.itemId);
-                if (!item) return null;
-                // Find cheapest current price for this item
-                const itemPrices = prices.filter(p => p.itemId === alert.itemId);
-                const cheapest = itemPrices.length > 0
-                  ? itemPrices.reduce((min, p) => p.price < min.price ? p : min)
-                  : null;
-                const cheapestStore = cheapest ? stores.find(s => s.id === cheapest.storeId) : null;
-                const isHit = cheapest && cheapest.price <= alert.targetPrice;
-
                 return (
                   <Card
                     key={alert.id}
-                    className={isHit ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/20" : ""}
+                    className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/20"
                     data-testid={`alert-card-${alert.id}`}
                   >
                     <CardContent className="py-3 px-4 sm:px-5 flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                          isHit ? "bg-green-100 dark:bg-green-900/30" : "bg-amber-100 dark:bg-amber-900/30"
-                        }`} aria-hidden="true">
-                          <BellRing className={`w-4 h-4 ${isHit ? "text-green-600" : "text-amber-500"}`} />
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-green-100 dark:bg-green-900/30" aria-hidden="true">
+                          <BellRing className="w-4 h-4 text-green-600" />
                         </div>
                         <div>
                           <p className="text-sm font-medium">
-                            {item.name}
-                            {isHit && (
-                              <span className="ml-2 text-xs font-semibold text-green-600 dark:text-green-400">
-                                Price dropped
-                              </span>
-                            )}
+                            Alert triggered
+                            <span className="ml-2 text-xs font-semibold text-green-600 dark:text-green-400">
+                              Price dropped
+                            </span>
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Target: ${alert.targetPrice.toFixed(2)}
-                            {cheapest && cheapestStore && (
-                              <> · Now ${cheapest.price.toFixed(2)} at {cheapestStore.name}</>
-                            )}
+                            Target: ${alert.targetPrice.toFixed(2)} · Triggered {alert.lastTriggered}
                           </p>
                         </div>
                       </div>
-                      {isHit && (
-                        <Badge className="bg-green-600 text-white text-[10px] shrink-0">Deal</Badge>
-                      )}
+                      <Badge className="bg-green-600 text-white text-[10px] shrink-0">Deal</Badge>
                     </CardContent>
                   </Card>
                 );
