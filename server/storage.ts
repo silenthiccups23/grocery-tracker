@@ -2,6 +2,7 @@ import {
   type Store, type InsertStore, stores,
   type Item, type InsertItem, items,
   type PriceEntry, type InsertPriceEntry, priceEntries,
+  type PriceAlert, type InsertPriceAlert, priceAlerts,
   settings,
 } from "@shared/schema";
 import { eq, and, desc } from "drizzle-orm";
@@ -44,6 +45,13 @@ export interface IStorage {
   getPriceEntriesByItem(itemId: number): Promise<PriceEntry[]>;
   createPriceEntry(entry: InsertPriceEntry): Promise<PriceEntry>;
   deletePriceEntry(id: number): Promise<void>;
+
+  // Price Alerts
+  getPriceAlerts(): Promise<PriceAlert[]>;
+  getPriceAlertsByItem(itemId: number): Promise<PriceAlert[]>;
+  createPriceAlert(alert: InsertPriceAlert): Promise<PriceAlert>;
+  updatePriceAlert(id: number, data: Partial<InsertPriceAlert & { lastTriggered: string | null }>): Promise<PriceAlert>;
+  deletePriceAlert(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -118,6 +126,7 @@ export class DatabaseStorage implements IStorage {
   async deleteItem(id: number): Promise<void> {
     await db.delete(items).where(eq(items.id, id));
     await db.delete(priceEntries).where(eq(priceEntries.itemId, id));
+    await db.delete(priceAlerts).where(eq(priceAlerts.itemId, id));
   }
 
   // Price Entries
@@ -138,6 +147,34 @@ export class DatabaseStorage implements IStorage {
 
   async deletePriceEntry(id: number): Promise<void> {
     await db.delete(priceEntries).where(eq(priceEntries.id, id));
+  }
+
+  // Price Alerts
+  async getPriceAlerts(): Promise<PriceAlert[]> {
+    return db.select().from(priceAlerts);
+  }
+
+  async getPriceAlertsByItem(itemId: number): Promise<PriceAlert[]> {
+    return db.select().from(priceAlerts).where(eq(priceAlerts.itemId, itemId));
+  }
+
+  async createPriceAlert(alert: InsertPriceAlert): Promise<PriceAlert> {
+    const rows = await db.insert(priceAlerts).values(alert).returning();
+    return rows[0];
+  }
+
+  async updatePriceAlert(id: number, data: Partial<InsertPriceAlert & { lastTriggered: string | null }>): Promise<PriceAlert> {
+    const updates: any = {};
+    if (data.targetPrice !== undefined) updates.targetPrice = data.targetPrice;
+    if (data.active !== undefined) updates.active = data.active;
+    if (data.lastTriggered !== undefined) updates.lastTriggered = data.lastTriggered;
+    if (data.itemId !== undefined) updates.itemId = data.itemId;
+    const rows = await db.update(priceAlerts).set(updates).where(eq(priceAlerts.id, id)).returning();
+    return rows[0];
+  }
+
+  async deletePriceAlert(id: number): Promise<void> {
+    await db.delete(priceAlerts).where(eq(priceAlerts.id, id));
   }
 }
 

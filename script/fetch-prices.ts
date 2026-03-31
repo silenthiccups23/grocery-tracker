@@ -28,7 +28,7 @@ import "dotenv/config";
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { eq } from "drizzle-orm";
-import { stores, items, priceEntries, settings } from "../shared/schema.js";
+import { stores, items, priceEntries, priceAlerts, settings } from "../shared/schema.js";
 
 // --- Validate environment ---
 const requiredVars = ["KROGER_CLIENT_ID", "KROGER_CLIENT_SECRET"];
@@ -320,6 +320,42 @@ async function main() {
       console.log("   (Costco API support — coming soon)");
     } else {
       console.log("\n⚠️  Skipping Costco — no RAPIDAPI_KEY set.");
+    }
+  }
+
+  // --- Check price alerts ---
+  const activeAlerts = await db.select().from(priceAlerts).where(eq(priceAlerts.active, 1));
+  if (activeAlerts.length > 0) {
+    console.log(`\n🔔 Checking ${activeAlerts.length} price alert${activeAlerts.length === 1 ? '' : 's'}...`);
+    const todaysPrices = await db.select().from(priceEntries).where(eq(priceEntries.date, today));
+
+    let triggeredCount = 0;
+    for (const alert of activeAlerts) {
+      const itemMatch = allItems.find(i => i.id === alert.itemId);
+      if (!itemMatch) continue;
+
+      // Find the cheapest price for this item from today's fetch
+      const itemPrices = todaysPrices.filter(p => p.itemId === alert.itemId);
+      if (itemPrices.length === 0) continue;
+
+      const cheapest = itemPrices.reduce((min, p) => p.price < min.price ? p : min);
+      const cheapestStore = allStores.find(s => s.id === cheapest.storeId);
+
+      if (cheapest.price <= alert.targetPrice) {
+        triggeredCount++;
+        console.log(`   🎉 ${itemMatch.name} is $${cheapest.price.toFixed(2)} at ${cheapestStore?.name || 'unknown'} (target: $${alert.targetPrice.toFixed(2)})`);
+
+        // Mark the alert as triggered
+        await db.update(priceAlerts)
+          .set({ lastTriggered: today })
+          .where(eq(priceAlerts.id, alert.id));
+      }
+    }
+
+    if (triggeredCount === 0) {
+      console.log("   No alerts triggered today — prices haven't dropped to your targets yet.");
+    } else {
+      console.log(`   ${triggeredCount} alert${triggeredCount === 1 ? '' : 's'} triggered!`);
     }
   }
 

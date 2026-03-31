@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertStoreSchema, insertItemSchema, insertPriceEntrySchema, parseTags } from "@shared/schema";
+import { insertStoreSchema, insertItemSchema, insertPriceEntrySchema, insertPriceAlertSchema, parseTags } from "@shared/schema";
 import {
   setKrogerCredentials, getKrogerCredentials, hasKrogerCredentials,
   searchProducts, searchLocations, fetchPricesForItem,
@@ -175,6 +175,46 @@ export async function registerRoutes(
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
     await storage.deletePriceEntry(id);
+    res.status(204).send();
+  });
+
+  // === PRICE ALERTS ===
+  app.get("/api/alerts", async (_req, res) => {
+    const alerts = await storage.getPriceAlerts();
+    res.json(alerts);
+  });
+
+  app.get("/api/alerts/item/:itemId", async (req, res) => {
+    const itemId = parseInt(req.params.itemId);
+    if (isNaN(itemId)) return res.status(400).json({ error: "Invalid ID" });
+    const alerts = await storage.getPriceAlertsByItem(itemId);
+    res.json(alerts);
+  });
+
+  app.post("/api/alerts", async (req, res) => {
+    const parsed = insertPriceAlertSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.message });
+    }
+    const alert = await storage.createPriceAlert(parsed.data);
+    res.status(201).json(alert);
+  });
+
+  app.patch("/api/alerts/:id", async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+    try {
+      const updated = await storage.updatePriceAlert(id, req.body);
+      res.json(updated);
+    } catch {
+      res.status(404).json({ error: "Alert not found" });
+    }
+  });
+
+  app.delete("/api/alerts/:id", async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+    await storage.deletePriceAlert(id);
     res.status(204).send();
   });
 

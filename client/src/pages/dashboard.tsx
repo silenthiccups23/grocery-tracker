@@ -1,13 +1,13 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
-import type { Store, Item, PriceEntry } from "@shared/schema";
+import type { Store, Item, PriceEntry, PriceAlert } from "@shared/schema";
 import { parseTags, TAG_OPTIONS, computeUnitPrice, formatUnitPrice, formatSize } from "@shared/schema";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Store as StoreIcon, ShoppingCart, DollarSign, TrendingDown, ExternalLink, RefreshCw, Loader2 } from "lucide-react";
+import { Store as StoreIcon, ShoppingCart, DollarSign, TrendingDown, ExternalLink, RefreshCw, Loader2, BellRing } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getStoreProductUrl, navigateToStore } from "@/lib/storeLinks";
@@ -24,6 +24,9 @@ export default function Dashboard() {
   });
   const { data: prices = [], isLoading: pricesLoading } = useQuery<PriceEntry[]>({
     queryKey: ["/api/prices"],
+  });
+  const { data: alerts = [] } = useQuery<PriceAlert[]>({
+    queryKey: ["/api/alerts"],
   });
   const fetchPricesMutation = useMutation({
     mutationFn: async () => {
@@ -313,6 +316,70 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Triggered Price Alerts */}
+        {alerts.filter(a => a.lastTriggered).length > 0 && (
+          <div
+            className="mb-6"
+            role="region"
+            aria-label="Price alerts"
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <BellRing className="w-4 h-4 text-amber-500" aria-hidden="true" />
+              <h2 className="text-base font-semibold">Price Alerts</h2>
+            </div>
+            <div className="space-y-2">
+              {alerts.filter(a => a.lastTriggered).map((alert) => {
+                const item = items.find(i => i.id === alert.itemId);
+                if (!item) return null;
+                // Find cheapest current price for this item
+                const itemPrices = prices.filter(p => p.itemId === alert.itemId);
+                const cheapest = itemPrices.length > 0
+                  ? itemPrices.reduce((min, p) => p.price < min.price ? p : min)
+                  : null;
+                const cheapestStore = cheapest ? stores.find(s => s.id === cheapest.storeId) : null;
+                const isHit = cheapest && cheapest.price <= alert.targetPrice;
+
+                return (
+                  <Card
+                    key={alert.id}
+                    className={isHit ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/20" : ""}
+                    data-testid={`alert-card-${alert.id}`}
+                  >
+                    <CardContent className="py-3 px-4 sm:px-5 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                          isHit ? "bg-green-100 dark:bg-green-900/30" : "bg-amber-100 dark:bg-amber-900/30"
+                        }`} aria-hidden="true">
+                          <BellRing className={`w-4 h-4 ${isHit ? "text-green-600" : "text-amber-500"}`} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">
+                            {item.name}
+                            {isHit && (
+                              <span className="ml-2 text-xs font-semibold text-green-600 dark:text-green-400">
+                                Price dropped
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Target: ${alert.targetPrice.toFixed(2)}
+                            {cheapest && cheapestStore && (
+                              <> · Now ${cheapest.price.toFixed(2)} at {cheapestStore.name}</>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      {isHit && (
+                        <Badge className="bg-green-600 text-white text-[10px] shrink-0">Deal</Badge>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Price Comparison */}
         <div

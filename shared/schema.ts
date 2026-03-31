@@ -22,6 +22,14 @@ export const items = sqliteTable("items", {
   defaultUnit: text("default_unit"), // Default unit for this item (fl oz, oz, lb, ct, gal, L)
 });
 
+export const priceAlerts = sqliteTable("price_alerts", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  itemId: integer("item_id").notNull(),
+  targetPrice: real("target_price").notNull(), // Alert when price drops to or below this
+  active: integer("active").notNull().default(1), // 1 = active, 0 = paused
+  lastTriggered: text("last_triggered"), // ISO date when alert last fired, null if never
+});
+
 export const priceEntries = sqliteTable("price_entries", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   itemId: integer("item_id").notNull(),
@@ -36,6 +44,7 @@ export const priceEntries = sqliteTable("price_entries", {
 export const insertStoreSchema = createInsertSchema(stores).omit({ id: true });
 export const insertItemSchema = createInsertSchema(items).omit({ id: true });
 export const insertPriceEntrySchema = createInsertSchema(priceEntries).omit({ id: true });
+export const insertPriceAlertSchema = createInsertSchema(priceAlerts).omit({ id: true });
 
 // Types
 export type Store = typeof stores.$inferSelect;
@@ -44,6 +53,8 @@ export type Item = typeof items.$inferSelect;
 export type InsertItem = z.infer<typeof insertItemSchema>;
 export type PriceEntry = typeof priceEntries.$inferSelect;
 export type InsertPriceEntry = z.infer<typeof insertPriceEntrySchema>;
+export type PriceAlert = typeof priceAlerts.$inferSelect;
+export type InsertPriceAlert = z.infer<typeof insertPriceAlertSchema>;
 
 // Helper to parse tags from JSON string
 export function parseTags(item: Item): string[] {

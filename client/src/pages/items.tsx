@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ShoppingCart, ArrowLeft, Plus, Trash2, Package, Pencil, X, Search, List, Loader2 } from "lucide-react";
 import { CATEGORIES, CATEGORY_DESCRIPTIONS, unitLabels } from "@/lib/constants";
 import { ItemEditRow } from "@/components/ItemEditRow";
+import { PriceAlertButton } from "@/components/PriceAlertButton";
 
 export default function Items() {
   const { toast } = useToast();
@@ -635,6 +636,7 @@ export default function Items() {
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
+                        <PriceAlertButton itemId={item.id} itemName={item.name} />
                         <Button
                           variant="ghost"
                           size="icon"
