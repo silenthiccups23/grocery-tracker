@@ -32,7 +32,7 @@ export function parseKrogerSize(sizeStr: string, defaultUnit: string | null): { 
     }},
     { regex: /^(\d+\.?\d*)\s*ct/i, handler: m => ({ size: parseFloat(m[1]), unit: "ct" }) },
     { regex: /^(\d+\.?\d*)\s*count/i, handler: m => ({ size: parseFloat(m[1]), unit: "ct" }) },
-    { regex: /^(\d+\.?\d*)\s*l(?:iter)?/i, handler: m => ({ size: parseFloat(m[1]), unit: "L" }) },
+    { regex: /^(\d+\.?\d*)\s*l(?:iter)?s?(?!b)\b/i, handler: m => ({ size: parseFloat(m[1]), unit: "L" }) },
   ];
 
   for (const { regex, handler } of patterns) {
