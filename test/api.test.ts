@@ -248,6 +248,104 @@ async function testPrices() {
 }
 
 // ============================================================
+// PRICE ALERTS
+// ============================================================
+async function testAlerts() {
+  console.log("\n🔔 PRICE ALERTS CRUD");
+
+  // Create an item to attach alerts to
+  const { data: item } = await api("POST", "/api/items", {
+    name: "Alert Test Eggs",
+    category: "Dairy",
+    tags: null,
+    defaultUnit: "ct",
+  });
+
+  // GET all alerts (should be empty)
+  const { status: listStatus, data: alertList } = await api("GET", "/api/alerts");
+  assert(listStatus === 200, "GET /api/alerts returns 200");
+  assert(Array.isArray(alertList), "GET /api/alerts returns an array");
+
+  // POST create alert
+  const { status: createStatus, data: newAlert } = await api("POST", "/api/alerts", {
+    itemId: item.id,
+    targetPrice: 2.99,
+    active: 1,
+  });
+  assert(createStatus === 201, "POST /api/alerts returns 201");
+  assert(newAlert.itemId === item.id, "Alert linked to correct item");
+  assert(newAlert.targetPrice === 2.99, "Alert has correct target price");
+  assert(newAlert.active === 1, "Alert is active by default");
+  assert(newAlert.lastTriggered === null, "Alert has no trigger date initially");
+  const alertId = newAlert.id;
+
+  // POST with missing required fields
+  const { status: badAlert } = await api("POST", "/api/alerts", {
+    itemId: item.id,
+    // missing targetPrice
+  });
+  assert(badAlert === 400, "POST /api/alerts without targetPrice returns 400");
+
+  // GET alerts by item
+  const { status: byItemStatus, data: itemAlerts } = await api("GET", `/api/alerts/item/${item.id}`);
+  assert(byItemStatus === 200, "GET /api/alerts/item/:id returns 200");
+  assert(itemAlerts.length === 1, "Item has 1 alert");
+  assert(itemAlerts[0].targetPrice === 2.99, "Alert by item has correct price");
+
+  // GET alerts by item — invalid ID
+  const { status: badItemAlert } = await api("GET", "/api/alerts/item/abc");
+  assert(badItemAlert === 400, "GET /api/alerts/item/abc returns 400");
+
+  // PATCH update alert — change target price
+  const { status: patchStatus, data: updatedAlert } = await api("PATCH", `/api/alerts/${alertId}`, {
+    targetPrice: 3.49,
+  });
+  assert(patchStatus === 200, "PATCH /api/alerts/:id returns 200");
+  assert(updatedAlert.targetPrice === 3.49, "Alert price was updated");
+  assert(updatedAlert.active === 1, "Alert still active after update");
+
+  // PATCH — toggle active off
+  const { data: pausedAlert } = await api("PATCH", `/api/alerts/${alertId}`, {
+    active: 0,
+  });
+  assert(pausedAlert.active === 0, "Alert can be paused (active=0)");
+
+  // PATCH — set lastTriggered
+  const { data: triggeredAlert } = await api("PATCH", `/api/alerts/${alertId}`, {
+    active: 1,
+    lastTriggered: "2026-03-30",
+  });
+  assert(triggeredAlert.lastTriggered === "2026-03-30", "Alert lastTriggered updated");
+  assert(triggeredAlert.active === 1, "Alert re-activated");
+
+  // Create a second alert for the same item
+  const { data: alert2 } = await api("POST", "/api/alerts", {
+    itemId: item.id,
+    targetPrice: 1.99,
+    active: 1,
+  });
+  const { data: twoAlerts } = await api("GET", `/api/alerts/item/${item.id}`);
+  assert(twoAlerts.length === 2, "Item can have multiple alerts");
+
+  // DELETE alert
+  const { status: deleteStatus } = await api("DELETE", `/api/alerts/${alertId}`);
+  assert(deleteStatus === 204, "DELETE /api/alerts/:id returns 204");
+
+  // Verify delete
+  const { data: afterDelete } = await api("GET", `/api/alerts/item/${item.id}`);
+  assert(afterDelete.length === 1, "Alert was deleted (1 remaining)");
+
+  // DELETE invalid ID
+  const { status: badDelete } = await api("DELETE", "/api/alerts/abc");
+  assert(badDelete === 400, "DELETE /api/alerts/abc returns 400");
+
+  // Test cascade: deleting item should delete its alerts
+  await api("DELETE", `/api/items/${item.id}`);
+  const { data: orphanAlerts } = await api("GET", `/api/alerts/item/${item.id}`);
+  assert(orphanAlerts.length === 0, "Deleting item cascades to delete its alerts");
+}
+
+// ============================================================
 // EDGE CASES
 // ============================================================
 async function testEdgeCases() {
@@ -290,6 +388,7 @@ async function main() {
     await testStores();
     await testItems();
     await testPrices();
+    await testAlerts();
     await testEdgeCases();
   } catch (err: any) {
     console.error("\n💥 Unexpected error:", err.message);
