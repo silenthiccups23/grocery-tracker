@@ -1,26 +1,25 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useSearch } from "wouter";
+import { Link } from "wouter";
 import type { Product, CollectedPrice, Store } from "@shared/schema";
-import { CATEGORY_ICONS, GROCERY_CATEGORIES, formatSize, computeUnitPrice, formatUnitPrice } from "@shared/schema";
+import { CATEGORY_ICONS, GROCERY_CATEGORIES, computeUnitPrice, formatUnitPrice } from "@shared/schema";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest } from "@/lib/queryClient";
+import { cleanProductName, getLatestPricePerStore } from "@/lib/productUtils";
 import {
-  ShoppingCart, ArrowLeft, Search, Package, ChevronRight, Store as StoreIcon, Tag,
+  ShoppingCart, ArrowLeft, Search, Package,
 } from "lucide-react";
 
 export default function Products() {
-  // Read URL params for initial state
   const urlSearch = typeof window !== 'undefined' ? new URLSearchParams(window.location.hash.split('?')[1] || '') : new URLSearchParams();
   const [search, setSearch] = useState(urlSearch.get('q') || "");
   const [selectedCategory, setSelectedCategory] = useState(urlSearch.get('cat') || "");
   const [debouncedSearch, setDebouncedSearch] = useState(urlSearch.get('q') || "");
 
-  // Debounce search input
   const [debounceTimer, setDebounceTimer] = useState<any>(null);
   const handleSearchChange = (value: string) => {
     setSearch(value);
@@ -45,13 +44,12 @@ export default function Products() {
   const productList = productData?.products ?? [];
   const totalProducts = productData?.total ?? 0;
 
-  // For each product, fetch its latest prices
+  // Fetch prices for visible products
   const productIds = productList.map(p => p.id);
   const { data: allPrices = [] } = useQuery<CollectedPrice[]>({
     queryKey: ["/api/product-prices-batch", productIds.join(",")],
     queryFn: async () => {
       if (productIds.length === 0) return [];
-      // Fetch prices for each product in parallel
       const results = await Promise.all(
         productIds.map(async id => {
           const res = await apiRequest("GET", `/api/products/${id}/prices`);
@@ -99,7 +97,7 @@ export default function Products() {
             />
           </div>
 
-          {/* Category filter chips */}
+          {/* Category chips */}
           <div className="flex flex-wrap gap-2 mb-6" role="group" aria-label="Filter by category">
             <button
               onClick={() => setSelectedCategory("")}
@@ -143,7 +141,7 @@ export default function Products() {
           {isLoading ? (
             <div className="space-y-3">
               {[1, 2, 3, 4, 5].map(i => (
-                <Skeleton key={i} className="h-20 w-full rounded-lg" />
+                <Skeleton key={i} className="h-24 w-full rounded-lg" />
               ))}
             </div>
           ) : productList.length === 0 ? (
@@ -158,29 +156,34 @@ export default function Products() {
                 <p className="text-sm text-muted-foreground max-w-xs">
                   {debouncedSearch || selectedCategory
                     ? "Try a different search term or category."
-                    : "Products will appear here after the Raspberry Pi runs its nightly collection."}
+                    : "Products will appear here after the nightly collection runs."}
                 </p>
               </CardContent>
             </Card>
           ) : (
             <div className="space-y-2">
               {productList.map(product => {
-                // Get prices for this product
-                const productPrices = allPrices.filter(p => p.productId === product.id);
-                // Find cheapest
+                const rawPrices = allPrices.filter(p => p.productId === product.id);
+                const productPrices = getLatestPricePerStore(rawPrices);
                 const cheapest = productPrices.length > 0
                   ? productPrices.reduce((min, p) => p.price < min.price ? p : min)
                   : null;
-                const cheapestStore = cheapest ? stores.find(s => s.id === cheapest.storeId) : null;
-                // Find most expensive for comparison
                 const mostExpensive = productPrices.length > 1
                   ? productPrices.reduce((max, p) => p.price > max.price ? p : max)
                   : null;
+                const savings = cheapest && mostExpensive && mostExpensive.price > cheapest.price
+                  ? mostExpensive.price - cheapest.price
+                  : 0;
+                const cheapestStore = cheapest ? stores.find(s => s.id === cheapest.storeId) : null;
 
                 const icon = product.category ? (CATEGORY_ICONS[product.category] || "📦") : "📦";
+                const displayName = cleanProductName(product.name, product.brand);
                 const unitPrice = cheapest && product.sizeNum && product.sizeUnit
                   ? computeUnitPrice(cheapest.price, product.sizeNum, product.sizeUnit)
                   : null;
+
+                // Clean size display
+                const sizeDisplay = product.size && product.size !== "yes" ? product.size : "";
 
                 return (
                   <Card key={product.id} data-testid={`product-card-${product.id}`}>
@@ -192,50 +195,49 @@ export default function Products() {
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium leading-tight" data-testid={`product-name-${product.id}`}>
-                              {product.name}
+                              {displayName}
                             </p>
-                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                               {product.brand && (
                                 <span className="text-[11px] text-muted-foreground">{product.brand}</span>
                               )}
-                              {product.brand && product.size && (
+                              {product.brand && sizeDisplay && (
                                 <span className="text-[11px] text-muted-foreground" aria-hidden="true">·</span>
                               )}
-                              {product.size && (
-                                <span className="text-[11px] text-muted-foreground">{product.size}</span>
-                              )}
-                              {product.category && (
-                                <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{product.category}</Badge>
+                              {sizeDisplay && (
+                                <span className="text-[11px] text-muted-foreground">{sizeDisplay}</span>
                               )}
                             </div>
 
-                            {/* Prices across stores */}
+                            {/* Price comparison chips */}
                             {productPrices.length > 0 && (
                               <div className="flex flex-wrap gap-1.5 mt-2">
-                                {productPrices.map(pp => {
-                                  const store = stores.find(s => s.id === pp.storeId);
-                                  const isCheapest = cheapest && pp.storeId === cheapest.storeId;
-                                  return (
-                                    <span
-                                      key={pp.id}
-                                      className={`text-[11px] px-2 py-1 rounded-md ${
-                                        isCheapest
-                                          ? "bg-blue-600 text-white font-semibold"
-                                          : "bg-muted text-muted-foreground"
-                                      }`}
-                                      data-testid={`price-chip-${product.id}-${pp.storeId}`}
-                                    >
-                                      {isCheapest && <span className="mr-0.5">✓</span>}
-                                      {store?.name}: ${pp.price.toFixed(2)}
-                                    </span>
-                                  );
-                                })}
+                                {productPrices
+                                  .sort((a, b) => a.price - b.price)
+                                  .map(pp => {
+                                    const store = stores.find(s => s.id === pp.storeId);
+                                    const isCheapest = cheapest && pp.storeId === cheapest.storeId && productPrices.length > 1;
+                                    return (
+                                      <span
+                                        key={`${product.id}-${pp.storeId}`}
+                                        className={`text-[11px] px-2 py-1 rounded-md ${
+                                          isCheapest
+                                            ? "bg-blue-600 text-white font-semibold"
+                                            : "bg-muted text-muted-foreground"
+                                        }`}
+                                        data-testid={`price-chip-${product.id}-${pp.storeId}`}
+                                      >
+                                        {isCheapest && <span className="mr-0.5">✓</span>}
+                                        {store?.name || "Store"}: ${pp.price.toFixed(2)}
+                                      </span>
+                                    );
+                                  })}
                               </div>
                             )}
                           </div>
                         </div>
 
-                        {/* Price summary on the right */}
+                        {/* Price summary */}
                         {cheapest && (
                           <div className="text-right shrink-0">
                             <p className="text-sm font-semibold text-primary tabular-nums" data-testid={`product-price-${product.id}`}>
@@ -251,9 +253,9 @@ export default function Products() {
                                 at {cheapestStore.name}
                               </p>
                             )}
-                            {mostExpensive && mostExpensive.price > cheapest.price && (
-                              <p className="text-[10px] text-green-600 font-medium mt-0.5">
-                                Save ${(mostExpensive.price - cheapest.price).toFixed(2)}
+                            {savings >= 0.10 && (
+                              <p className="text-[11px] font-semibold text-green-600 mt-0.5">
+                                Save ${savings.toFixed(2)}
                               </p>
                             )}
                           </div>

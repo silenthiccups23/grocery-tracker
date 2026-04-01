@@ -13,6 +13,7 @@ import {
   Search, Clock, BellRing, ArrowRight,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { cleanProductName, getLatestPricePerStore } from "@/lib/productUtils";
 
 export default function Dashboard() {
   const [quickSearch, setQuickSearch] = useState("");
@@ -24,7 +25,7 @@ export default function Dashboard() {
   const { data: productData, isLoading: productsLoading } = useQuery<{ products: Product[]; total: number }>({
     queryKey: ["/api/products", "dashboard"],
     queryFn: async () => {
-      const res = await apiRequest("GET", "/api/products?limit=50");
+      const res = await apiRequest("GET", "/api/products?limit=200");
       return res.json();
     },
   });
@@ -52,18 +53,19 @@ export default function Dashboard() {
   // Find products with the biggest savings (price difference between stores)
   const bestDeals = sampleProducts
     .map(product => {
-      const prices = allPrices.filter(p => p.productId === product.id);
+      const rawPrices = allPrices.filter(p => p.productId === product.id);
+      const prices = getLatestPricePerStore(rawPrices);
       if (prices.length < 2) return null;
       const cheapest = prices.reduce((min, p) => p.price < min.price ? p : min);
       const mostExpensive = prices.reduce((max, p) => p.price > max.price ? p : max);
       const savings = mostExpensive.price - cheapest.price;
-      if (savings < 0.10) return null; // skip trivial differences
+      if (savings < 0.10) return null;
       const cheapestStore = stores.find(s => s.id === cheapest.storeId);
       return { product, cheapest, mostExpensive, savings, cheapestStore };
     })
     .filter(Boolean)
     .sort((a, b) => b!.savings - a!.savings)
-    .slice(0, 6) as Array<{
+    .slice(0, 8) as Array<{
       product: Product;
       cheapest: CollectedPrice;
       mostExpensive: CollectedPrice;
@@ -298,7 +300,7 @@ export default function Dashboard() {
                           {icon}
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-medium leading-tight line-clamp-2">{product.name}</p>
+                          <p className="text-sm font-medium leading-tight line-clamp-2">{cleanProductName(product.name, product.brand)}</p>
                           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                             {product.brand && (
                               <span className="text-[11px] text-muted-foreground">{product.brand}</span>
