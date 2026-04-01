@@ -55,10 +55,15 @@ export default function Stores() {
       return (data.stores || []) as FoundStore[];
     },
     onSuccess: (found) => {
+      // Only show Kroger-family stores (currently supported)
+      const krogerKeywords = ["kroger", "ralphs", "fry", "fred meyer", "king soopers", "smith", "food 4 less", "food4less"];
+      const supported = found.filter(store => 
+        krogerKeywords.some(kw => store.name.toLowerCase().includes(kw))
+      );
       // Deduplicate by chain name (keep one per chain)
       const seen = new Set<string>();
       const deduped: FoundStore[] = [];
-      for (const store of found) {
+      for (const store of supported) {
         const chainName = store.name.toLowerCase().replace(/[^a-z]/g, "");
         if (!seen.has(chainName)) {
           seen.add(chainName);
@@ -216,7 +221,7 @@ export default function Stores() {
               <MapPinned className="w-5 h-5 text-primary shrink-0" aria-hidden="true" />
               <div>
                 <h2 className="text-sm font-semibold">Find stores near you</h2>
-                <p className="text-xs text-muted-foreground">Search by zip code and radius, then pick the stores you want to track.</p>
+                <p className="text-xs text-muted-foreground">Currently supports Kroger-family stores: Ralphs, Food 4 Less, Kroger, Fry's, Fred Meyer, King Soopers. More stores coming soon.</p>
               </div>
             </div>
             <form onSubmit={handleSearch} className="flex flex-col sm:flex-row flex-wrap gap-2 items-stretch sm:items-center">

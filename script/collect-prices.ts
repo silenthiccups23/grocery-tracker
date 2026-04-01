@@ -57,21 +57,22 @@ async function loadCollectors(): Promise<StoreCollector[]> {
     console.log("⚠️  Skipping Kroger — no API credentials set");
   }
 
-  // Walmart (Playwright-based)
-  try {
-    const { WalmartCollector } = await import("./collectors/walmart-collector.js");
-    collectors.push(new WalmartCollector());
-  } catch (e: any) {
-    console.log("⚠️  Skipping Walmart — Playwright not available:", e.message);
-  }
+  // Walmart (Playwright-based) — disabled until tested
+  // To enable: uncomment and run `npx playwright install chromium` on the Pi
+  // try {
+  //   const { WalmartCollector } = await import("./collectors/walmart-collector.js");
+  //   collectors.push(new WalmartCollector());
+  // } catch (e: any) {
+  //   console.log("⚠️  Skipping Walmart:", e.message);
+  // }
 
-  // Albertsons/Vons (Playwright-based)
-  try {
-    const { AlbertsonsCollector } = await import("./collectors/albertsons-collector.js");
-    collectors.push(new AlbertsonsCollector());
-  } catch (e: any) {
-    console.log("⚠️  Skipping Albertsons — Playwright not available:", e.message);
-  }
+  // Albertsons/Vons (Playwright-based) — disabled until tested
+  // try {
+  //   const { AlbertsonsCollector } = await import("./collectors/albertsons-collector.js");
+  //   collectors.push(new AlbertsonsCollector());
+  // } catch (e: any) {
+  //   console.log("⚠️  Skipping Albertsons:", e.message);
+  // }
 
   return collectors;
 }
