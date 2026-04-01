@@ -196,8 +196,15 @@ async function main() {
           }
           productsStored++;
 
-          // Store prices for each matching store
-          for (const store of chainStores) {
+          // Store price at the matching store
+          // If the product has a storeName (e.g. "Ralphs", "Food 4 Less"), match it specifically
+          // Otherwise, store at all chain stores
+          const matchingStores = cp.storeName
+            ? chainStores.filter(s => s.name.toLowerCase().includes(cp.storeName!.toLowerCase()) ||
+                cp.storeName!.toLowerCase().includes(s.name.toLowerCase()))
+            : chainStores;
+
+          for (const store of (matchingStores.length > 0 ? matchingStores : chainStores.slice(0, 1))) {
             await db.insert(collectedPrices).values({
               productId,
               storeId: store.id,

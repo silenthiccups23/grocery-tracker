@@ -19,6 +19,7 @@ export interface CollectedProduct {
   storeProductUrl?: string;
   price: number;
   promoPrice?: number;
+  storeName?: string;     // which specific store this price is from (e.g. "Ralphs", "Food 4 Less")
 }
 
 export interface CollectorResult {

@@ -1,16 +1,14 @@
 /**
  * Kroger Collector
  * 
- * Uses the Kroger API (free) to collect products by category.
- * Covers: Kroger, Ralphs, Fry's, Fred Meyer, King Soopers, Smith's, Food 4 Less
+ * Uses the Kroger API (free) to collect products from multiple Kroger-family locations.
+ * Each location (Ralphs, Food 4 Less, etc.) may have different prices for the same product.
  * 
  * Strategy:
- *   1. Find Kroger locations near the user's zip code
- *   2. For each grocery category, search for common products
- *   3. Extract product name, brand, price, size from the API response
- * 
- * The Kroger API doesn't have a "browse all" endpoint, so we search
- * by common product terms within each category.
+ *   1. Find all Kroger locations near the user's zip code
+ *   2. For each location, search common product terms across categories
+ *   3. Return products tagged with which store they came from
+ *   4. The main runner maps these to the user's stores in the database
  */
 
 import type { Browser } from "playwright";
@@ -18,8 +16,7 @@ import type { StoreCollector, CollectorResult, CollectedProduct } from "./types.
 
 const KROGER_API_BASE = "https://api.kroger.com/v1";
 
-// Common grocery search terms organized by category.
-// Each term returns ~10 products, giving us broad coverage.
+// Common grocery search terms organized by category
 const CATEGORY_SEARCHES: Record<string, string[]> = {
   Dairy: [
     "milk", "whole milk", "2% milk", "oat milk", "almond milk",
@@ -101,7 +98,7 @@ async function getAccessToken(): Promise<string> {
 async function searchLocations(zipCode: string): Promise<Array<{ locationId: string; name: string; chain: string }>> {
   const token = await getAccessToken();
   const res = await fetch(
-    `${KROGER_API_BASE}/locations?filter.zipCode.near=${zipCode}&filter.radiusInMiles=25&filter.limit=10`,
+    `${KROGER_API_BASE}/locations?filter.zipCode.near=${zipCode}&filter.radiusInMiles=25&filter.limit=20`,
     { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } }
   );
   if (!res.ok) throw new Error(`Location search failed: ${res.status}`);
@@ -124,7 +121,7 @@ async function searchProducts(term: string, locationId: string, limit: number = 
   return data.data || [];
 }
 
-function parseApiProduct(apiProduct: any, category: string): CollectedProduct | null {
+function parseApiProduct(apiProduct: any, category: string, storeName: string): CollectedProduct | null {
   const item = apiProduct.items?.[0];
   if (!item) return null;
 
@@ -150,64 +147,99 @@ function parseApiProduct(apiProduct: any, category: string): CollectedProduct | 
     price: promoPrice || price,
     promoPrice: promoPrice,
     storeProductUrl: `https://www.kroger.com/p/${apiProduct.productId}`,
+    storeName,
   };
 }
+
+// Maps store names to Kroger chain identifiers
+const KROGER_CHAIN_MAP: Record<string, string[]> = {
+  "Ralphs": ["RALPHS"],
+  "Food 4 Less": ["FOOD4LESS", "FOOD 4 LESS"],
+  "Kroger": ["KROGER"],
+  "Fry's": ["FRYS", "FRY'S"],
+  "Fred Meyer": ["FRED MEYER", "FREDMEYER"],
+  "King Soopers": ["KING SOOPERS"],
+  "Smith's": ["SMITHS", "SMITH'S"],
+};
 
 export class KrogerCollector implements StoreCollector {
   chain = "kroger";
   name = "Kroger";
-  private locationId = "";
+  private locations: Array<{ locationId: string; name: string; chain: string; storeName: string }> = [];
   private zipCode = "";
 
   async init(options: { browser?: Browser; zipCode: string }) {
     this.zipCode = options.zipCode;
-    
-    // Find nearest location
+
     console.log(`   Finding Kroger locations near ${this.zipCode}...`);
-    const locations = await searchLocations(this.zipCode);
-    if (locations.length === 0) {
+    const allLocations = await searchLocations(this.zipCode);
+    if (allLocations.length === 0) {
       throw new Error("No Kroger locations found nearby");
     }
-    this.locationId = locations[0].locationId;
-    console.log(`   Using: ${locations[0].name} (${locations[0].chain})`);
+
+    // Find one location per chain type (Ralphs, Food 4 Less, etc.)
+    const seenChains = new Set<string>();
+    for (const loc of allLocations) {
+      const chainUpper = loc.chain.toUpperCase();
+      // Map to a friendly store name
+      let storeName = loc.chain;
+      for (const [friendly, matchers] of Object.entries(KROGER_CHAIN_MAP)) {
+        if (matchers.some(m => chainUpper.includes(m))) {
+          storeName = friendly;
+          break;
+        }
+      }
+
+      if (!seenChains.has(storeName)) {
+        seenChains.add(storeName);
+        this.locations.push({ ...loc, storeName });
+        console.log(`   📍 ${storeName}: ${loc.name} (${loc.chain})`);
+      }
+    }
+
+    console.log(`   Using ${this.locations.length} location(s)`);
   }
 
   async collectAll(): Promise<CollectorResult> {
     const allProducts: CollectedProduct[] = [];
     const errors: string[] = [];
-    const seen = new Set<string>(); // deduplicate by name
 
     const categories = Object.entries(CATEGORY_SEARCHES);
-    let totalSearches = categories.reduce((sum, [, terms]) => sum + terms.length, 0);
-    let completed = 0;
+    const totalSearches = categories.reduce((sum, [, terms]) => sum + terms.length, 0);
 
-    for (const [category, searchTerms] of categories) {
-      console.log(`\n   📂 ${category} (${searchTerms.length} searches)`);
+    // Collect from each location separately
+    for (const location of this.locations) {
+      console.log(`\n   🏪 Collecting from ${location.storeName}...`);
+      const seen = new Set<string>();
+      let completed = 0;
+      let locationProducts = 0;
 
-      for (const term of searchTerms) {
-        try {
-          const apiProducts = await searchProducts(term, this.locationId, 10);
+      for (const [category, searchTerms] of categories) {
+        for (const term of searchTerms) {
+          try {
+            const apiProducts = await searchProducts(term, location.locationId, 10);
 
-          for (const ap of apiProducts) {
-            const parsed = parseApiProduct(ap, category);
-            if (parsed && !seen.has(parsed.name.toLowerCase())) {
-              seen.add(parsed.name.toLowerCase());
-              allProducts.push(parsed);
+            for (const ap of apiProducts) {
+              const parsed = parseApiProduct(ap, category, location.storeName);
+              if (parsed && !seen.has(parsed.name.toLowerCase())) {
+                seen.add(parsed.name.toLowerCase());
+                allProducts.push(parsed);
+                locationProducts++;
+              }
             }
+          } catch (err: any) {
+            errors.push(`${location.storeName}/${category}/${term}: ${err.message}`);
           }
-        } catch (err: any) {
-          errors.push(`${category}/${term}: ${err.message}`);
+
+          completed++;
+          process.stdout.write(`\r   Progress: ${completed}/${totalSearches} searches, ${locationProducts} products`);
+
+          await new Promise(r => setTimeout(r, 150));
         }
-
-        completed++;
-        process.stdout.write(`\r   Progress: ${completed}/${totalSearches} searches, ${allProducts.length} products found`);
-
-        // Small delay to stay within rate limits
-        await new Promise(r => setTimeout(r, 200));
       }
-    }
 
-    console.log(""); // newline after progress
+      console.log(`\r   ${location.storeName}: ${locationProducts} products found${" ".repeat(20)}`);
+    }
 
     return { chain: this.chain, products: allProducts, errors };
   }

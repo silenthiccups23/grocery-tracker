@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import type { Product, CollectedPrice, Store } from "@shared/schema";
 import { CATEGORY_ICONS, GROCERY_CATEGORIES, formatSize, computeUnitPrice, formatUnitPrice } from "@shared/schema";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,9 +14,11 @@ import {
 } from "lucide-react";
 
 export default function Products() {
-  const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  // Read URL params for initial state
+  const urlSearch = typeof window !== 'undefined' ? new URLSearchParams(window.location.hash.split('?')[1] || '') : new URLSearchParams();
+  const [search, setSearch] = useState(urlSearch.get('q') || "");
+  const [selectedCategory, setSelectedCategory] = useState(urlSearch.get('cat') || "");
+  const [debouncedSearch, setDebouncedSearch] = useState(urlSearch.get('q') || "");
 
   // Debounce search input
   const [debounceTimer, setDebounceTimer] = useState<any>(null);
